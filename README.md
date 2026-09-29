@@ -1,3 +1,14 @@
+# Elstar
+
+**A reusable iOS agent harness for the tools and everyday use cases of iPhone and iPad apps.**
+
+Elstar is a Swift package that helps an AI-powered iOS app use device features
+such as Calendar, Reminders, Maps, location, Weather, and the current time. Its
+goal is to provide the safe layer between an AI model and those iOS tools: the
+model decides what it needs, and Elstar runs only supported operations and
+reports what actually happened. Your app supplies the model and the interface
+people see.
+
 ```text
                                                   ..--==+++++++++++.
                                              .-=+**###**********##=
@@ -37,58 +48,68 @@
                      /_____/_____/____//_/ /_/  |_/_/ |_|
 ```
 
-# Elstar
+## What can it help with?
 
-**Bounded plan-act-verify device-tool harness for Apple platforms.**
+An app using Elstar could handle requests like these:
 
-Elstar lets a language model - on-device or remote - plan device goals as
-plain structured values, then safely executes a fixed catalog of tool
-operations against Apple frameworks. Every outcome is verified by read-back,
-and the result handed back to the model is grounded, not hallucinated. The
-model plans and narrates; only the harness touches the device.
-
-Elstar is the reusable, host-agnostic core. It ships no UI, no model runtime,
-and no networking policy of its own: a host app supplies those through small
-seams (see [Host contract](#host-contract-what-you-provide)).
-
-## Built on Apple frameworks
-
-| framework | used for |
+| Someone asks | Elstar can help the app |
 | --- | --- |
-| EventKit | Reminder and calendar reads |
-| MapKit | Nearby place search and directions destination resolution |
-| CoreLocation | One-shot current location |
-| WeatherKit | Current conditions and forecasts |
-| URLSession | Validated reads of a single public web page |
-| Foundation | Time, dates, and the injected clock |
-| FoundationModels / remote APIs | *Not bundled* - the host supplies the planner |
+| “What's on my calendar tomorrow?” | Read events or check when the person is free. |
+| “What reminders do I still have?” | Read reminder lists and open reminders. |
+| “Find coffee near me.” | Get the current place and search nearby places. |
+| “How do I get there?” | Prepare a destination so the app can offer a choice of installed map apps. |
+| “What's the weather this afternoon?” | Read current conditions or a forecast. |
+| “What time is it here?” | Read the device's local date, time, and time zone. |
+| “Read this web page.” | Fetch the visible text and links from one public HTTPS page. |
 
-## What it is (and is not)
+**Today, all built-in tools are read-only.** Elstar does not add, change, or
+delete reminders or calendar events. It prepares directions but leaves the
+choice to open a map app to the host app and the person using it. A host can
+add its own tools that change data; those must ask for **Allow once** and keep
+a record of what happened.
 
-**Is:** a library you can embed in any iOS 18+ app to let a model safely
-operate on-device data - reminders, calendar, places, weather, a public web
-page - under strict budgets, explicit one-shot confirmations for mutations,
-and durable receipts.
+## How it works
 
-**Is not:** an app, a chat UI, a model, an agent framework, or a full
-"assistant". It contains no server code, no accounts, no telemetry, and no
-network calls other than the user-requested public web fetch.
+1. Your app's AI model makes a plan for the person's request.
+2. Elstar checks the plan against its supported tools and limits how many
+   steps it can take.
+3. Elstar calls the relevant iOS framework, checks the result, and tells the
+   model whether the goal was met or why it failed.
+4. Your app shows the answer, results, and any permission choices in its own
+   interface.
+
+The model cannot call iOS APIs directly through Elstar. Elstar is the part
+that controls which tool runs and returns a result grounded in the device's
+response.
+
+## What your app provides
+
+Elstar is a library, not a finished assistant or chat app. The host app
+provides:
+
+- An AI model, either on the device or through the app's own remote service.
+- The screen where people ask questions and see answers and tool activity.
+- The iOS permissions and capabilities needed for the features it enables.
+- The choice of map app when someone asks for directions.
+
+Elstar has no accounts or telemetry. It does not include a model, chat UI, or
+networking for a remote model. Its built-in network access is limited to the
+user-requested public web-page reader.
 
 ## Requirements
 
-- iOS 18+ and Xcode 16+ (swift-tools 6.0).
-- macOS 14+ compiles the shared logic for tests; device-only services fall
-  back to honest "unavailable" stubs rather than faking success.
-- WeatherKit capability for live weather on a real device.
-- Info.plist usage strings for the frameworks you enable (reminders, calendar,
-  location) as required by those frameworks.
+- iOS 18+ and Xcode 16+ (Swift tools 6.0).
+- WeatherKit capability to provide live weather on a real device.
+- The required `Info.plist` usage descriptions for reminders, calendar, and
+  location when the app uses those features.
+- macOS 14+ can compile the shared logic for tests; iOS-only services report
+  that they are unavailable instead of pretending to work.
 
-## Install
+## Add Elstar to an app
 
-Add Elstar as a Swift Package, pinned to a commit on `main`:
+Add the Swift package to `Package.swift`:
 
 ```swift
-// Package.swift
 dependencies: [
     .package(url: "https://github.com/manuelemosr/elstar.git", branch: "main"),
 ],
@@ -99,84 +120,45 @@ targets: [
 ]
 ```
 
+Then import it in Swift:
+
 ```swift
 import Elstar
 ```
 
-## Tool catalog
+## Built-in tools
 
-Each operation id is host-facing; a host maps it to whatever model-facing
-tool name its planner uses (for example `get_current_time`). The catalog and
-argument contracts are shared so different transports stay identical.
+These are the operation IDs an app uses when it connects its model to
+Elstar. An app can present friendlier names to the model.
 
-| tool_name | description | interface | kind |
-| --- | --- | --- | --- |
-| `time.current` | Current local date, time, and time zone | Foundation (injected clock) | read |
-| `reminders.list_lists` | List the person's reminder lists by name | EventKit | read |
-| `reminders.list` | List open reminders with titles, due dates, and list ids | EventKit | read |
-| `calendar.list` | List calendar events for a bounded range or a specific day | EventKit | read |
-| `calendar.availability` | Read busy/free blocks for a range or day | EventKit | read |
-| `places.current` | Resolve the device's current place (coordinate + optional address) | CoreLocation + MapKit | read |
-| `places.search` | Search for nearby places matching a query | MapKit | read |
-| `places.directions` | Prepare directions to a chosen place for the host's map-app chooser | MapKit reachability | read |
-| `weather.current` | Current conditions, or an hourly/daily forecast | WeatherKit | read |
-| `webfetch.read` | Read one public https page's visible text and links | URLSession validated fetch | read |
+| Operation ID | What it reads or prepares | Apple API |
+| --- | --- | --- |
+| `time.current` | Local date, time, and time zone | Foundation |
+| `reminders.list_lists` | Reminder lists | EventKit |
+| `reminders.list` | Open reminders and due dates | EventKit |
+| `calendar.list` | Events for a day or date range | EventKit |
+| `calendar.availability` | Busy and free times | EventKit |
+| `places.current` | Current place and optional address | CoreLocation, MapKit |
+| `places.search` | Nearby places matching a search | MapKit |
+| `places.directions` | A destination for the app's map chooser | MapKit |
+| `weather.current` | Current weather or a forecast | WeatherKit |
+| `webfetch.read` | Text and links from one public HTTPS page | URLSession |
 
-Every mutation asks for a one-shot **Allow once** and never receives a
-persistent grant. The built-in catalog has no mutating operations: opening a
-map app is the host's UI choice, so `places.directions` only reports the
-destination and the host presents the installed map apps. Hosts may add
-mutating operations that reuse the confirmation and receipt machinery.
+## Connect it to your app
 
-## Repository structure
+Elstar needs a few pieces from the host app: an `AppleAgentPlanner` that wraps
+the model, an `AppleToolExecutor` that runs tools, an event sink that forwards
+results to the UI, active-operation tracking, and the Apple services the app
+enables. Developer diagnostics are optional and available only in DEBUG
+builds. The [architecture guide](docs/ARCHITECTURE.md) explains how these
+pieces fit together.
 
-`Sources/Elstar/` - the library. Grouped by responsibility:
-
-| file | what it is about |
-| --- | --- |
-| `AppleAgentHarness.swift` | The plan-act-verify loop: goals, plans, executed steps, prompt budgets, and `AppleAgentHarness.run(...)`. Owns the outcome and the "every goal verified" rule. |
-| `AppleToolCoordinator.swift` | `AppleToolExecutor`, the single entry point that *runs one operation*: confirmation gating, result/receipt assembly, and the display `toolName`. Implements `AppleToolDispatching`. |
-| `AppleToolDomain.swift` | The domain model and catalog: tool families, operations, request/result/error types, and the operation vocabulary everything else shares. |
-| `AppleToolServices.swift` | The service protocols (reminders, calendar, places, weather, web fetch), the `AppleToolServices` dependency container, macOS "unavailable" stubs, the `AppleToolDispatching` / `AppleFoundationModelRuntime` seams, and the single-resume guard for repeated framework callbacks. |
-| `AppleNativeToolServices.swift` | The real implementations: `EventKitRemindersService`, `EventKitCalendarService`, `MapKitPlacesService`, `OneShotLocationProvider`, `WeatherKitWeatherService`. |
-| `AppleWebFetch.swift` | The public-page fetcher: URL/SSRF validation, redirect-hop limits, HTML-to-text and link extraction, and size/time limits. |
-| `AppleWebFetchClient.swift` | The concrete `URLSession` HTTP client behind the `AppleWebFetchHTTPClient` protocol (injectable for tests). |
-| `AppleToolResolution.swift` | Injectable clock (`AppleClock`), date/instant parsing and formatting, the current-time summary, and directions/anchor helpers. Deterministic time is why tests can advance the clock. |
-| `AppleToolPiping.swift` | Durability and safety plumbing: `AppleToolJournal` (receipts), `AppleOperationSerializer` (one operation at a time), `AppleConfirmationStore` + `AppleOnceFlag` (Allow once). |
-| `HarnessSeams.swift` | The host seams and shared interaction types: `HarnessConversationKey`, `HarnessToolEventSink`, `HarnessActiveOperationTracking`, `PendingInteraction`/`PendingQuestion`, and the default permission card. |
-| `HarnessToolDiagnostics.swift` | DEBUG-only diagnostics protocol and scrubber for the host's developer tooling. Absent from release behavior. |
-| `DeviceAgentPlannerSupport.swift` | The model-agnostic planner surface: prompt builders, operation contracts, `DeviceAgent*` decision DTOs, the request builder, and step selection/resolution. Shared by any planner. |
-| `AppleIntelligenceAvailability.swift` | Availability value plus honest reasons/recovery when the built-in model cannot answer. |
-
-`Tests/ElstarTests/` - package-level tests. `Package.swift`, `LICENSE` (MIT),
-and this README round out the package.
-
-## Host contract (what you provide)
-
-Elstar depends on the host through narrow protocols. A host app typically
-wires:
-
-1. **A planner** - `AppleAgentPlanner` (`plan`, `nextStep`, `reconsider`).
-   Wrap your model (on-device or remote) so it returns plain
-   `AppleAgentPlan` / `AppleAgentStep` values. Elstar never calls a model
-   directly and never parses English keywords.
-2. **A dispatcher** - `AppleToolExecutor` (you construct it and pass it as
-   `any AppleToolDispatching`).
-3. **An event sink** - `HarnessToolEventSink` to receive tool deltas, action
-   receipts, and permission interactions and map them into your UI.
-4. **Active-operation tracking** - `HarnessActiveOperationTracking` so the
-   host knows which operation is in flight.
-5. **Native services** - `AppleToolServices(...)` with the real services, or
-   the `Unavailable*` stubs on platforms without a given framework.
-6. **Optional diagnostics** - `HarnessDiagnosticRecording` (DEBUG builds
-   only).
-
-### Minimal wiring
+Here is the basic wiring. The app supplies `myPlanner`, `myEventSink`,
+`myActiveOperationTracker`, `id`, `userText`, `history`, and `plannedGoals`:
 
 ```swift
 import Elstar
 
-// 1. One executor per conversation turn.
 let services = AppleToolServices(
     reminders: EventKitRemindersService(),
     calendar: EventKitCalendarService(),
@@ -196,37 +178,36 @@ let executor = AppleToolExecutor(
     services: services
 )
 
-// 2. Run the bounded loop with your planner.
 let harness = AppleAgentHarness(planner: myPlanner, dispatcher: executor)
 let outcome = await harness.run(task: userText, history: history, goals: plannedGoals)
 ```
 
-## Extending
+To add a tool, define its operation and request in `AppleToolDomain.swift`,
+implement its service, connect it in `AppleToolCoordinator.swift`, and describe
+it in `DeviceAgentPlannerSupport.swift` so a model can plan it. Tools that
+change data must use `AppleConfirmationStore` and record a receipt in
+`AppleToolJournal`.
 
-To add an operation: add the case and request to `AppleToolDomain.swift`, add
-(or reuse) a service protocol in `AppleToolServices.swift`, implement it in
-`AppleNativeToolServices.swift`, add the executor arm in
-`AppleToolCoordinator.swift`, and describe it in `DeviceAgentPlannerSupport.swift`
-so planners can plan it. Reads should verify by read-back; mutations must go
-through `AppleConfirmationStore` and write a journal receipt.
+The library lives in `Sources/Elstar/`, with package tests in
+`Tests/ElstarTests/`. See the [architecture guide](docs/ARCHITECTURE.md) for
+the request flow and safety rules.
 
-## Testing
+## Build and test
 
 ```bash
 swift build
 swift test
 ```
 
-On a machine whose active toolchain is the Command Line Tools, prefix with
+If the active toolchain is the Command Line Tools, prefix these commands with
 `DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer` so the Swift
 Testing macro plugin resolves.
 
-## Status and roadmap
+## Project status
 
-- Package-level tests cover the domain catalog, the executor, the journal and
-  serializer, plan-act-verify, and the web-fetch boundary.
-- Planned: a demo/example app that exercises confirmations and tool cards, a
-  `Docs/` site, and a tagged `1.0` release.
+Package tests cover the tool catalog, execution, receipts, and the web-page
+reader. A demo app, a documentation site, and a tagged 1.0 release are
+planned.
 
 ## Contributing
 
