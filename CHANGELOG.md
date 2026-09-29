@@ -11,8 +11,11 @@ Initial release ("Elstar bring-up").
   prompt budgets (`AppleAgentHarness`).
 - Device tool catalog: current time, reminder/calendar reads, places
   search/current/directions, weather, and validated public web fetch.
-- One-shot "Allow once" confirmations for the single mutation (opening Maps
-  directions), with no persistent grants.
+- `places.directions` prepares a destination (`AppleDirectionsPresentation`)
+  for the host to open in the map app the person picks; the harness opens no
+  app itself.
+- One-shot "Allow once" confirmation + receipt machinery for host-added
+  mutating operations, with no persistent grants.
 - Durable action-receipt journal with confirmed / uncertain / failed outcomes,
   so a possibly-committed write is never silently replayed.
 - Host seams for planning, dispatching, event streams, active-operation

@@ -384,7 +384,7 @@ public nonisolated enum DeviceAgentOperationCatalog {
         DeviceAgentOperationContract(
             operation: .directions,
             localToken: "directions",
-            summary: "open Maps directions to a chosen place; reports only that Maps opened, never a completed journey",
+            summary: "prepare directions to a chosen place; the app then shows the map apps installed on the device for the person to choose, never a completed journey",
             required: ["title or identifier: the destination name; use the exact name or id from a places.search result when available"],
             optional: ["mode: driving, walking, or transit (defaults to driving)"],
             prerequisites: "Prefer the exact destination from a places.search result.",
@@ -712,7 +712,7 @@ public nonisolated enum DeviceAgentPlannerPrompts {
         """
         You plan a single request. Decide whether answering requires real device data or an action, or is ordinary conversation.
         \(assistantName) runs on the person's iPhone and can execute real tools there even when you are a remote model. Your own lack of direct OS access is never a reason to choose conversation or to refuse.
-        Actionable (choose goals): reading the current time; reading weather, location or nearby places, calendar, or reminders; reading a public web page the person names; and opening directions to a place.
+        Actionable (choose goals): reading the current time; reading weather, location or nearby places, calendar, or reminders; reading a public web page the person names; and preparing directions to a place.
         Conversation (no goals): explanations, opinions, coding help, general knowledge, greetings, and hypothetical examples that are not real device requests. Missing details do not make a request conversation: choose the goal and the app gathers the missing detail through the tools.
         When actionable, list the distinct required goals (the real operations the request needs) using the exact operation ids, not auxiliary reads.
         Examples:

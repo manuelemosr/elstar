@@ -10,10 +10,10 @@ struct AppleToolDomainTests {
         #expect(Set(AppleToolFamily.allCases) == [.reminders, .calendar, .places, .weather, .webfetch, .time])
     }
 
-    @Test("Only opening Maps directions is a mutation")
-    func mutationSet() {
+    @Test("The built-in catalog has no mutating operations")
+    func noMutations() {
         let mutations = AppleToolOperation.allCases.filter(\.isMutation)
-        #expect(mutations == [.directions])
+        #expect(mutations.isEmpty)
     }
 
     @Test("Every operation has a unique stable raw value and a display name")
@@ -44,16 +44,14 @@ struct AppleToolDomainTests {
         #expect(requests.count == AppleToolOperation.allCases.count)
     }
 
-    @Test("Directions is the only operation requiring confirmation")
-    func confirmation() {
+    @Test("Directions is a read that needs no confirmation and carries a presentation")
+    func directionsRead() {
         let directions = AppleToolRequest.directions(
             AppleDirectionsRequest(destinationID: "p1", destinationName: "The Park", mode: .walking)
         )
-        #expect(directions.isMutation)
-        #expect(directions.confirmationTitle == "Open Maps for directions?")
-        #expect(directions.confirmationDetail == "Open Maps to \"The Park\" - walking.")
+        #expect(!directions.isMutation)
+        #expect(directions.confirmationDetail == nil)
         #expect(!AppleToolRequest.currentTime.isMutation)
-        #expect(AppleToolRequest.currentTime.confirmationDetail == nil)
     }
 
     @Test("Error copy is honest and never a silent success")

@@ -124,7 +124,7 @@ public nonisolated final class AppleToolExecutor: AppleToolDispatching, @uncheck
 #if DEBUG
             developerRecorder?.recordToolResult(turnID: messageID, callID: operationID, operation: request.operation.rawValue, status: result.status.rawValue, summary: result.summary, structured: DeveloperChatToolArguments.result(result), conversationKey: key.absoluteKey)
 #endif
-            emit(.completed, operationID: operationID, name: toolName, detail: result.items.first?.subtitle, output: result.modelText, map: result.mapPresentation, weather: result.weatherPresentation)
+            emit(.completed, operationID: operationID, name: toolName, detail: result.items.first?.subtitle, output: result.modelText, map: result.mapPresentation, directions: result.directionsPresentation, weather: result.weatherPresentation)
             return result
         } catch let error as AppleToolError {
             let status = AppleToolStatus(error: error)
@@ -318,11 +318,15 @@ public nonisolated final class AppleToolExecutor: AppleToolDispatching, @uncheck
             )
 
         case .directions(let directionsRequest):
-            try await services.places.openInMaps(directionsRequest)
             return AppleToolResult(
-                summary: "Opened Maps to \"\(directionsRequest.destinationName)\".",
-                items: [AppleToolDisplayItem(title: directionsRequest.destinationName, subtitle: "Opened in Maps", reference: directionsRequest.destinationID)],
-                receipt: receipt(request, operationID: operationID, nativeID: directionsRequest.destinationID, summary: directionsRequest.destinationName, detail: "Opened in Maps (\(directionsRequest.mode.displayName)) - not a completed journey")
+                summary: "Ready to open directions to \"\(directionsRequest.destinationName)\". Choose a map app.",
+                items: [AppleToolDisplayItem(title: directionsRequest.destinationName, subtitle: directionsRequest.destinationAddress, reference: directionsRequest.destinationID)],
+                directionsPresentation: AppleDirectionsPresentation(
+                    destinationID: directionsRequest.destinationID,
+                    destinationName: directionsRequest.destinationName,
+                    destinationAddress: directionsRequest.destinationAddress,
+                    mode: directionsRequest.mode
+                )
             )
 
         case .currentTime:
@@ -390,22 +394,7 @@ public nonisolated final class AppleToolExecutor: AppleToolDispatching, @uncheck
         return AppleMapPresentation(results: results, sourceTimestamp: timestamp, accuracyMeters: accuracy, addressUnavailable: addressUnavailable)
     }
 
-    private func receipt(_ request: AppleToolRequest, operationID: String, nativeID: String?, summary: String, detail: String? = nil, status: AppleToolStatus = .confirmed) -> AppleToolReceipt {
-        AppleToolReceipt(
-            operationID: operationID,
-            family: request.family,
-            action: request.toolName,
-            nativeID: nativeID,
-            summary: summary,
-            recordedAt: clock.now(),
-            detail: detail,
-            status: status,
-            conversationID: key.conversationID,
-            assistantMessageID: messageID
-        )
-    }
-
-    private func emit(_ status: ToolActivity.Status, operationID: String, name: String, detail: String?, output: String? = nil, map: AppleMapPresentation? = nil, weather: AppleWeatherPresentation? = nil) {
+    private func emit(_ status: ToolActivity.Status, operationID: String, name: String, detail: String?, output: String? = nil, map: AppleMapPresentation? = nil, directions: AppleDirectionsPresentation? = nil, weather: AppleWeatherPresentation? = nil) {
         sink.toolDelta(key, messageID: messageID, part: ToolActivity(
             id: operationID,
             name: name,
@@ -414,6 +403,7 @@ public nonisolated final class AppleToolExecutor: AppleToolDispatching, @uncheck
             outputExcerpt: output.map { String($0.prefix(1_200)) },
             startedAt: clock.now(),
             mapPresentation: map,
+            directionsPresentation: directions,
             weatherPresentation: weather
         ))
     }
@@ -444,7 +434,7 @@ nonisolated extension AppleToolRequest {
         case .listCalendarEvents: "List calendar events"
         case .calendarAvailability: "Check availability"
         case .searchNearbyPlaces: "Find nearby places"
-        case .directions: "Open directions"
+        case .directions: "Directions"
         case .weather: "Get weather"
         case .fetchWebPage: "Read web page"
         case .currentTime: "Get current time"

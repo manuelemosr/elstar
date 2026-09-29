@@ -43,13 +43,13 @@ public nonisolated enum AppleToolOperation: String, CaseIterable, Codable, Senda
     case weather = "weather.current"
     case fetchWebPage = "webfetch.read"
 
+    /// Whether the operation changes user-visible state and therefore requires
+    /// an explicit per-action confirmation before it runs. No built-in
+    /// operation mutates state: opening a map app is now a host UI choice, not
+    /// a harness effect. Hosts may add mutating operations that use the
+    /// confirmation machinery.
     public var isMutation: Bool {
-        switch self {
-        case .directions:
-            true
-        default:
-            false
-        }
+        false
     }
 
     public var family: AppleToolFamily {
@@ -175,22 +175,11 @@ public nonisolated enum AppleToolRequest: Equatable, Sendable {
     }
 
     /// Bounded, deterministic confirmation copy with the exact values. Native
-    /// approvals never offer "Always", so this is a one-shot grant.
-    public var confirmationTitle: String {
-        switch self {
-        case .directions: "Open Maps for directions?"
-        default: "Allow this action?"
-        }
-    }
+    /// approvals never offer "Always", so this is a one-shot grant. Used only
+    /// by host-added mutating operations; the built-in catalog has none.
+    public var confirmationTitle: String { "Allow this action?" }
 
-    public var confirmationDetail: String? {
-        switch self {
-        case .directions(let r):
-            return "Open Maps to \"\(r.destinationName)\" - \(r.mode.displayName)."
-        default:
-            return nil
-        }
-    }
+    public var confirmationDetail: String? { nil }
 }
 
 // MARK: - Calendar requests
@@ -265,6 +254,28 @@ public nonisolated struct AppleFetchWebPageRequest: Equatable, Sendable {
 
     public init(url: URL) {
         self.url = url
+    }
+
+}
+
+/// A prepared directions destination. The harness never opens a map app; it
+/// reports the destination and mode so the host can offer the person a choice
+/// of the map apps installed on the device.
+public nonisolated struct AppleDirectionsPresentation: Codable, Equatable, Hashable, Sendable {
+    public var destinationID: String
+    public var destinationName: String
+    public var destinationAddress: String?
+    public var latitude: Double?
+    public var longitude: Double?
+    public var mode: AppleDirectionsMode
+
+    public init(destinationID: String, destinationName: String, destinationAddress: String? = nil, latitude: Double? = nil, longitude: Double? = nil, mode: AppleDirectionsMode) {
+        self.destinationID = destinationID
+        self.destinationName = destinationName
+        self.destinationAddress = destinationAddress
+        self.latitude = latitude
+        self.longitude = longitude
+        self.mode = mode
     }
 
 }
@@ -404,15 +415,19 @@ public nonisolated struct AppleToolResult: Equatable, Sendable {
     /// Structured, persistable map payload for inline rendering. Never parsed
     /// back out of `summary`.
     public var mapPresentation: AppleMapPresentation?
+    /// Structured, persistable directions destination for the host to render as
+    /// a map-app chooser. Never parsed back out of `summary`.
+    public var directionsPresentation: AppleDirectionsPresentation?
     /// Structured, persistable WeatherKit attribution for the weather card.
     public var weatherPresentation: AppleWeatherPresentation?
 
-    public init(summary: String, items: [AppleToolDisplayItem] = [], receipt: AppleToolReceipt? = nil, status: AppleToolStatus = .confirmed, mapPresentation: AppleMapPresentation? = nil, weatherPresentation: AppleWeatherPresentation? = nil) {
+    public init(summary: String, items: [AppleToolDisplayItem] = [], receipt: AppleToolReceipt? = nil, status: AppleToolStatus = .confirmed, mapPresentation: AppleMapPresentation? = nil, directionsPresentation: AppleDirectionsPresentation? = nil, weatherPresentation: AppleWeatherPresentation? = nil) {
         self.summary = summary
         self.items = items
         self.receipt = receipt
         self.status = status
         self.mapPresentation = mapPresentation
+        self.directionsPresentation = directionsPresentation
         self.weatherPresentation = weatherPresentation
     }
 

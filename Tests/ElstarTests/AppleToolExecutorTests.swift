@@ -55,14 +55,13 @@ struct AppleToolExecutorTests {
         #expect(sink.deltas.map(\.status) == [.running, .completed])
     }
 
-    @Test("A mutation asks first and is declined without side effects")
-    func mutationDeclined() async {
-        let places = FakePlacesService()
+    @Test("Directions prepares a presentation with no confirmation, receipt, or side effect")
+    func directionsPreparesPresentation() async {
         let sink = RecordingEventSink()
         let journal = makeJournal()
         let confirmations = AppleConfirmationStore()
         let executor = makeExecutor(
-            services: .fake(places: places),
+            services: .fake(),
             sink: sink,
             tracker: RecordingTracker(),
             confirmations: confirmations,
@@ -70,55 +69,17 @@ struct AppleToolExecutorTests {
         )
 
         let request = AppleToolRequest.directions(
-            AppleDirectionsRequest(destinationID: "p1", destinationName: "The Park", mode: .walking)
+            AppleDirectionsRequest(destinationID: "p1", destinationName: "The Park", destinationAddress: "1 Park Rd", mode: .walking)
         )
-        let task = Task { await executor.perform(request) }
-        while confirmations.pendingIDs.isEmpty { await Task.yield() }
-        #expect(sink.interactions.count == 1)
-        #expect(sink.interactions.first?.options == ["Allow once", "Deny"])
-        confirmations.resolve(confirmations.pendingIDs[0], allowed: false)
+        let result = await executor.perform(request)
 
-        let result = await task.value
-        #expect(result == nil)
-        #expect(places.openedRequests.isEmpty)
-        #expect(sink.deltas.map(\.status) == [.running, .failed])
+        #expect(result?.directionsPresentation?.destinationName == "The Park")
+        #expect(result?.directionsPresentation?.mode == .walking)
+        #expect(result?.receipt == nil)
+        #expect(sink.interactions.isEmpty)
+        #expect(sink.receipts.isEmpty)
+        #expect(sink.deltas.map(\.status) == [.running, .completed])
         #expect(await journal.all().isEmpty)
-    }
-
-    @Test("An allowed mutation executes once, writes a receipt, and is never replayed in the turn")
-    func mutationAllowedAndDeduplicated() async {
-        let places = FakePlacesService()
-        let sink = RecordingEventSink()
-        let journal = makeJournal()
-        let confirmations = AppleConfirmationStore()
-        let executor = makeExecutor(
-            services: .fake(places: places),
-            sink: sink,
-            tracker: RecordingTracker(),
-            confirmations: confirmations,
-            journal: journal
-        )
-
-        let request = AppleToolRequest.directions(
-            AppleDirectionsRequest(destinationID: "p1", destinationName: "The Park", mode: .walking)
-        )
-        let task = Task { await executor.perform(request) }
-        while confirmations.pendingIDs.isEmpty { await Task.yield() }
-        confirmations.resolve(confirmations.pendingIDs[0], allowed: true)
-
-        let first = await task.value
-        #expect(first != nil)
-        #expect(places.openedRequests.count == 1)
-        #expect(sink.receipts.count == 1)
-        #expect(sink.receipts.first?.status == .confirmed)
-        #expect(await journal.all().count == 1)
-
-        // A duplicate call within the same turn returns the cached result
-        // without a new confirmation or a second effect.
-        let second = await executor.perform(request)
-        #expect(second == first)
-        #expect(places.openedRequests.count == 1)
-        #expect(sink.interactions.count == 1)
     }
 
     @Test("An unavailable service fails honestly as needing user action")

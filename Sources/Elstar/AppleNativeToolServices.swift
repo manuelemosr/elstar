@@ -468,27 +468,6 @@ public final class MapKitPlacesService: ApplePlacesService, @unchecked Sendable 
         )
     }
 
-    public func openInMaps(_ request: AppleDirectionsRequest) async throws {
-        // Resolve the actual destination, then open Maps. Reports only that
-        // Maps opened - never that a journey started or completed.
-        let searchRequest = MKLocalSearch.Request()
-        searchRequest.naturalLanguageQuery = request.destinationAddress.map { "\(request.destinationName) \($0)" } ?? request.destinationName
-        let items: [MKMapItem]
-        do {
-            items = try await startSearch(searchRequest).mapItems
-        } catch let error as AppleToolError {
-            throw error
-        } catch {
-            throw Self.friendlyMapError(error, for: request.destinationName)
-        }
-        guard let item = items.first else {
-            throw AppleToolError.notFound("I couldn't find \"\(request.destinationName)\" to route to.")
-        }
-        let options = [MKLaunchOptionsDirectionsModeKey: request.mode.mapsLaunchKey]
-        let opened = await MainActor.run { item.openInMaps(launchOptions: options) }
-        guard opened else { throw AppleToolError.notAvailable("Maps couldn't be opened.") }
-    }
-
     // MARK: Helpers
 
     private func startSearch(_ request: MKLocalSearch.Request) async throws -> MKLocalSearch.Response {

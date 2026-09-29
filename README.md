@@ -30,7 +30,7 @@ seams (see [Host contract](#host-contract-what-you-provide)).
 | framework | used for |
 | --- | --- |
 | EventKit | Reminder and calendar reads |
-| MapKit | Nearby place search and opening Maps directions |
+| MapKit | Nearby place search and directions destination resolution |
 | CoreLocation | One-shot current location |
 | WeatherKit | Current conditions and forecasts |
 | URLSession | Validated reads of a single public web page |
@@ -92,12 +92,15 @@ argument contracts are shared so different transports stay identical.
 | `calendar.availability` | Read busy/free blocks for a range or day | EventKit | read |
 | `places.current` | Resolve the device's current place (coordinate + optional address) | CoreLocation + MapKit | read |
 | `places.search` | Search for nearby places matching a query | MapKit | read |
-| `places.directions` | Open Maps directions to a chosen place | MapKit `openInMaps` | mutation (Allow once) |
+| `places.directions` | Prepare directions to a chosen place for the host's map-app chooser | MapKit reachability | read |
 | `weather.current` | Current conditions, or an hourly/daily forecast | WeatherKit | read |
 | `webfetch.read` | Read one public https page's visible text and links | URLSession validated fetch | read |
 
 Every mutation asks for a one-shot **Allow once** and never receives a
-persistent grant.
+persistent grant. The built-in catalog has no mutating operations: opening a
+map app is the host's UI choice, so `places.directions` only reports the
+destination and the host presents the installed map apps. Hosts may add
+mutating operations that reuse the confirmation and receipt machinery.
 
 ## Repository structure
 

@@ -197,8 +197,6 @@ public nonisolated protocol ApplePlacesService: AnyObject, Sendable {
     /// The device's own current place: a real CLLocation coordinate plus an
     /// optional reverse geocode. Never a text search.
     func currentPlace(_ request: AppleCurrentPlaceRequest) async throws -> ApplePlaceRecord
-    /// Opens the selected destination in Maps. Reports only that Maps opened.
-    func openInMaps(_ request: AppleDirectionsRequest) async throws
 }
 
 public nonisolated protocol AppleWeatherService: AnyObject, Sendable {
@@ -296,7 +294,6 @@ public nonisolated final class UnavailableApplePlacesService: ApplePlacesService
     public func locationAuthorizationStatus() async -> AppleNativeAuthorization { .restricted }
     public func search(_ request: AppleNearbyPlacesRequest) async throws -> [ApplePlaceRecord] { throw appleToolsUnavailable("Places") }
     public func currentPlace(_ request: AppleCurrentPlaceRequest) async throws -> ApplePlaceRecord { throw appleToolsUnavailable("Places") }
-    public func openInMaps(_ request: AppleDirectionsRequest) async throws { throw appleToolsUnavailable("Maps") }
 }
 
 public nonisolated final class UnavailableAppleWeatherService: AppleWeatherService, @unchecked Sendable {

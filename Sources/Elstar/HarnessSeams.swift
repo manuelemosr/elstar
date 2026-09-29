@@ -82,10 +82,13 @@ public nonisolated struct ToolActivity: Equatable, Hashable, Sendable, Codable {
     /// Structured, persisted map payload for a places read. Additive and
     /// optional so old documents decode unchanged.
     public var mapPresentation: AppleMapPresentation?
+    /// Structured, persisted directions destination for the host's map-app
+    /// chooser. Additive and optional so old documents decode unchanged.
+    public var directionsPresentation: AppleDirectionsPresentation?
     /// Structured, persisted WeatherKit attribution for a weather read. Additive and optional so old documents decode unchanged.
     public var weatherPresentation: AppleWeatherPresentation?
 
-    public init(id: String, name: String, status: Status, detail: String? = nil, outputExcerpt: String? = nil, startedAt: Date? = nil, mapPresentation: AppleMapPresentation? = nil, weatherPresentation: AppleWeatherPresentation? = nil) {
+    public init(id: String, name: String, status: Status, detail: String? = nil, outputExcerpt: String? = nil, startedAt: Date? = nil, mapPresentation: AppleMapPresentation? = nil, directionsPresentation: AppleDirectionsPresentation? = nil, weatherPresentation: AppleWeatherPresentation? = nil) {
         self.id = id
         self.name = name
         self.status = status
@@ -93,6 +96,7 @@ public nonisolated struct ToolActivity: Equatable, Hashable, Sendable, Codable {
         self.outputExcerpt = outputExcerpt
         self.startedAt = startedAt
         self.mapPresentation = mapPresentation
+        self.directionsPresentation = directionsPresentation
         self.weatherPresentation = weatherPresentation
     }
 
@@ -104,6 +108,7 @@ public nonisolated struct ToolActivity: Equatable, Hashable, Sendable, Codable {
         case outputExcerpt = "output_excerpt"
         case startedAt = "started_at"
         case mapPresentation = "map_presentation"
+        case directionsPresentation = "directions_presentation"
         case weatherPresentation = "weather_presentation"
     }
 
@@ -116,6 +121,7 @@ public nonisolated struct ToolActivity: Equatable, Hashable, Sendable, Codable {
         outputExcerpt = try container.decodeIfPresent(String.self, forKey: .outputExcerpt)
         startedAt = try container.decodeIfPresent(Date.self, forKey: .startedAt)
         mapPresentation = try container.decodeIfPresent(AppleMapPresentation.self, forKey: .mapPresentation)
+        directionsPresentation = try container.decodeIfPresent(AppleDirectionsPresentation.self, forKey: .directionsPresentation)
         weatherPresentation = try container.decodeIfPresent(AppleWeatherPresentation.self, forKey: .weatherPresentation)
     }
 }

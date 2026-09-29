@@ -43,7 +43,6 @@ final class FakeCalendarService: AppleCalendarService, @unchecked Sendable {
 final class FakePlacesService: ApplePlacesService, @unchecked Sendable {
     var searchResult: [ApplePlaceRecord] = []
     var currentPlaceResult: ApplePlaceRecord?
-    var openedRequests: [AppleDirectionsRequest] = []
     var error: AppleToolError?
 
     func locationAuthorizationStatus() async -> AppleNativeAuthorization { .authorized }
@@ -54,10 +53,6 @@ final class FakePlacesService: ApplePlacesService, @unchecked Sendable {
     func currentPlace(_ request: AppleCurrentPlaceRequest) async throws -> ApplePlaceRecord {
         if let error { throw error }
         return currentPlaceResult ?? ApplePlaceRecord(id: "current", name: "Current", latitude: 1, longitude: 2)
-    }
-    func openInMaps(_ request: AppleDirectionsRequest) async throws {
-        if let error { throw error }
-        openedRequests.append(request)
     }
 }
 

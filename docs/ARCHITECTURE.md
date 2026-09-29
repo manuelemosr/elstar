@@ -31,18 +31,23 @@ Any model-runtime, transport, or UI concern stays in the host.
    harness refuses to fall back to a permissive "something happened" check.
 2. **Act.** `run(task:history:goals:)` asks the planner for each next step
    (bounded by `maxSteps`), then dispatches it through the executor. The
-   executor serializes operations, gates mutations behind a one-shot
-   confirmation, and records a receipt.
+   executor serializes operations and returns a grounded result. No built-in
+   operation mutates state; a host-added mutation is gated behind a one-shot
+   confirmation and records a receipt.
 3. **Verify.** A goal is only discharged by a matching, confirmed result
-   (`AppleToolStatus.confirmed` with a read-back or a write receipt). A
-   failed or declined step does not satisfy its goal. The run ends when all
-   goals are satisfied, or with a bounded recovery replan for reads.
+   (`AppleToolStatus.confirmed`). A failed or declined step does not satisfy
+   its goal. The run ends when all goals are satisfied, or with a bounded
+   recovery replan for reads.
 
 ## Confirmations and receipts
 
-- Every mutation routes through `AppleConfirmationStore` and asks the person
-  for a single **Allow once** decision (`PendingInteraction`). There is no
-  persistent grant and no silent retry.
+- A mutating operation (host-added; the built-in catalog has none) routes
+  through `AppleConfirmationStore` and asks the person for a single **Allow
+  once** decision (`PendingInteraction`). There is no persistent grant and no
+  silent retry.
+- `places.directions` is a read that returns an `AppleDirectionsPresentation`;
+  the host renders the installed map apps and opens the chosen one. The
+  harness never opens a map app itself.
 - `AppleToolJournal` durably records each effect as `confirmed`, `failed`,
   or `uncertain`. An `uncertain` outcome is surfaced but never auto-replayed,
   so a possibly-committed write is not repeated after a relaunch.
