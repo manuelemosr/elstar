@@ -81,7 +81,7 @@ public final class SystemHostResolver: AppleHostResolving, @unchecked Sendable {
                         var buffer = [CChar](repeating: 0, count: Int(NI_MAXHOST))
                         let length = socklen_t(current.pointee.ai_addrlen)
                         if getnameinfo(sockaddr, length, &buffer, socklen_t(buffer.count), nil, 0, NI_NUMERICHOST) == 0 {
-                            addresses.append(String(cString: buffer))
+                            addresses.append(String(decoding: buffer.prefix { $0 != 0 }.map { UInt8(bitPattern: $0) }, as: UTF8.self))
                         }
                     }
                     pointer = current.pointee.ai_next
