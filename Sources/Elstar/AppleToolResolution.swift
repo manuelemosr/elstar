@@ -156,14 +156,19 @@ public nonisolated struct AppleMapResult: Codable, Equatable, Hashable, Sendable
     public var longitude: Double
     /// True for the device's own (approximate) current position.
     public var isCurrentPosition: Bool
+    /// MapKit place identifier carried from the live search so a reopened
+    /// conversation can fetch the native place details. Optional so stored
+    /// payloads written before this field still decode.
+    public var mapItemIdentifier: String?
 
-    public init(id: String, name: String, address: String? = nil, latitude: Double, longitude: Double, isCurrentPosition: Bool) {
+    public init(id: String, name: String, address: String? = nil, latitude: Double, longitude: Double, isCurrentPosition: Bool, mapItemIdentifier: String? = nil) {
         self.id = id
         self.name = name
         self.address = address
         self.latitude = latitude
         self.longitude = longitude
         self.isCurrentPosition = isCurrentPosition
+        self.mapItemIdentifier = mapItemIdentifier
     }
 
 }

@@ -239,10 +239,12 @@ public nonisolated struct AppleDirectionsRequest: Equatable, Sendable {
 public nonisolated struct AppleWeatherRequest: Equatable, Sendable {
     public var anchor: ApplePlaceAnchor
     public var kind: AppleWeatherRequestKind
+    public var highlightDay: Int?
 
-    public init(anchor: ApplePlaceAnchor, kind: AppleWeatherRequestKind) {
+    public init(anchor: ApplePlaceAnchor, kind: AppleWeatherRequestKind, highlightDay: Int? = nil) {
         self.anchor = anchor
         self.kind = kind
+        self.highlightDay = highlightDay
     }
 
 }
@@ -280,20 +282,42 @@ public nonisolated struct AppleDirectionsPresentation: Codable, Equatable, Hasha
 
 }
 
-/// WeatherKit attribution the app must display. Persisted on the weather tool
-/// activity so a reopened conversation still shows it; never parsed back out
-/// of the model's prose.
+/// Actual weather plus the WeatherKit attribution the app must display.
+/// Persisted on the weather tool activity so a reopened conversation still
+/// shows the card and its attribution; never parsed back out of the model's
+/// prose. All weather fields are additive optionals so history written before
+/// them still decodes.
 public nonisolated struct AppleWeatherPresentation: Codable, Equatable, Hashable, Sendable {
     public var locationName: String
     public var attributionText: String
     public var attributionURL: URL?
     public var attributionImageURL: URL?
+    public var condition: String?
+    public var temperatureCelsius: Double?
+    public var highCelsius: Double?
+    public var lowCelsius: Double?
+    public var symbolName: String?
+    public var isDaylight: Bool?
+    public var observedAt: Date?
+    public var timeZoneIdentifier: String?
+    public var forecast: [AppleWeatherDay]?
+    public var highlightedDate: Date?
 
-    public init(locationName: String, attributionText: String, attributionURL: URL? = nil, attributionImageURL: URL? = nil) {
+    public init(locationName: String, attributionText: String, attributionURL: URL? = nil, attributionImageURL: URL? = nil, condition: String? = nil, temperatureCelsius: Double? = nil, highCelsius: Double? = nil, lowCelsius: Double? = nil, symbolName: String? = nil, isDaylight: Bool? = nil, observedAt: Date? = nil, timeZoneIdentifier: String? = nil, forecast: [AppleWeatherDay]? = nil, highlightedDate: Date? = nil) {
         self.locationName = locationName
         self.attributionText = attributionText
         self.attributionURL = attributionURL
         self.attributionImageURL = attributionImageURL
+        self.condition = condition
+        self.temperatureCelsius = temperatureCelsius
+        self.highCelsius = highCelsius
+        self.lowCelsius = lowCelsius
+        self.symbolName = symbolName
+        self.isDaylight = isDaylight
+        self.observedAt = observedAt
+        self.timeZoneIdentifier = timeZoneIdentifier
+        self.forecast = forecast
+        self.highlightedDate = highlightedDate
     }
 
 }

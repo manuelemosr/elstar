@@ -357,7 +357,26 @@ public nonisolated final class AppleToolExecutor: AppleToolDispatching, @uncheck
             for day in snapshot.forecast {
                 items.append(AppleToolDisplayItem(title: day.day, subtitle: "\(day.condition) \(Int(day.highCelsius.rounded()))° / \(Int(day.lowCelsius.rounded()))°", reference: nil))
             }
-            return AppleToolResult(summary: summary, items: items, weatherPresentation: AppleWeatherPresentation(locationName: snapshot.locationName, attributionText: snapshot.attributionText, attributionURL: snapshot.attributionURL, attributionImageURL: snapshot.attributionImageURL))
+            // The highlight is matched by real calendar day in the location's
+            // timezone, never by array index, and only when that day actually
+            // exists in the fetched forecast.
+            var highlightedDate: Date?
+            if let offset = weatherRequest.highlightDay, (1...4).contains(offset) {
+                var dayCalendar = Calendar(identifier: .gregorian)
+                if let timeZoneID = snapshot.timeZoneIdentifier, let timeZone = TimeZone(identifier: timeZoneID) {
+                    dayCalendar.timeZone = timeZone
+                } else {
+                    dayCalendar.timeZone = .current
+                }
+                let reference = snapshot.observedAt ?? clock.now()
+                if let target = dayCalendar.date(byAdding: .day, value: offset, to: reference) {
+                    highlightedDate = snapshot.forecast.first(where: { day in
+                        guard let date = day.date else { return false }
+                        return dayCalendar.isDate(date, inSameDayAs: target)
+                    })?.date
+                }
+            }
+            return AppleToolResult(summary: summary, items: items, weatherPresentation: AppleWeatherPresentation(locationName: snapshot.locationName, attributionText: snapshot.attributionText, attributionURL: snapshot.attributionURL, attributionImageURL: snapshot.attributionImageURL, condition: snapshot.condition, temperatureCelsius: snapshot.temperatureCelsius, highCelsius: snapshot.highCelsius, lowCelsius: snapshot.lowCelsius, symbolName: snapshot.symbolName, isDaylight: snapshot.isDaylight, observedAt: snapshot.observedAt, timeZoneIdentifier: snapshot.timeZoneIdentifier, forecast: snapshot.forecast, highlightedDate: highlightedDate))
 
         case .fetchWebPage(let fetchRequest):
             let page = try await services.webFetch.fetch(fetchRequest)
@@ -386,7 +405,8 @@ public nonisolated final class AppleToolExecutor: AppleToolDispatching, @uncheck
                 address: place.address,
                 latitude: place.latitude,
                 longitude: place.longitude,
-                isCurrentPosition: place.isCurrentPosition
+                isCurrentPosition: place.isCurrentPosition,
+                mapItemIdentifier: place.mapItemIdentifier
             )
         }
         let accuracy = places.first(where: { $0.isCurrentPosition })?.accuracyMeters

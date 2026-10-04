@@ -267,6 +267,7 @@ public nonisolated final class AppleAgentHarness: @unchecked Sendable {
         var duplicateRepeats = 0
         var invalidAttempts = 0
         var satisfiedGoalRepeats = 0
+        var auxiliaryReadRepeats = 0
         var plannerCalls = 0
         var stickyKeys: Set<String> = []
         var ending: AppleAgentOutcome.Ending?
@@ -334,6 +335,19 @@ public nonisolated final class AppleAgentHarness: @unchecked Sendable {
                     // A write with no declared goal is not allowed.
                     invalidAttempts += 1
                     if invalidAttempts > maxReadRecovery {
+                        ending = .partial(Self.partialMessage(goals: goals, executed: executed))
+                        break
+                    }
+                    continue
+                } else if executed.contains(where: { step in
+                    step.goalID == nil && step.request.signature == request.signature && Self.isSuccessful(step)
+                }) {
+                    // A repeated SUCCESSFUL auxiliary read with the same
+                    // signature adds no new evidence, so it is rejected without
+                    // dispatching another read. Failed reads may still recover,
+                    // and distinct signatures or explicit goals stay executable.
+                    auxiliaryReadRepeats += 1
+                    if auxiliaryReadRepeats > maxReadRecovery {
                         ending = .partial(Self.partialMessage(goals: goals, executed: executed))
                         break
                     }

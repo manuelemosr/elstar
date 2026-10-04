@@ -418,6 +418,10 @@ public final class MapKitPlacesService: ApplePlacesService, @unchecked Sendable 
         return response.mapItems.prefix(request.limit).map { item in
             let coordinate = item.placemark.coordinate
             let distance = origin.map { CLLocation(latitude: coordinate.latitude, longitude: coordinate.longitude).distance(from: $0) }
+            var mapItemIdentifier: String?
+            if #available(iOS 18, macOS 15, *) {
+                mapItemIdentifier = item.identifier?.rawValue
+            }
             return ApplePlaceRecord(
                 id: "\(item.name ?? "place")|\(coordinate.latitude),\(coordinate.longitude)",
                 name: item.name ?? "Place",
@@ -425,7 +429,8 @@ public final class MapKitPlacesService: ApplePlacesService, @unchecked Sendable 
                 distanceMeters: distance,
                 website: item.url,
                 latitude: coordinate.latitude,
-                longitude: coordinate.longitude
+                longitude: coordinate.longitude,
+                mapItemIdentifier: mapItemIdentifier
             )
         }
     }
@@ -571,16 +576,28 @@ public final class WeatherKitWeatherService: AppleWeatherService, @unchecked Sen
         let current = try await service.weather(for: location, including: .current)
         var isHourly = false
         if case .hourly = request.kind { isHourly = true }
-        let daily = isHourly ? nil : (try? await service.weather(for: location, including: .daily))
+        // Daily is always fetched so every weather kind carries genuine today min/max.
+        let daily = try? await service.weather(for: location, including: .daily)
         let hourlyForecast = isHourly ? (try? await service.weather(for: location, including: .hourly)) : nil
         let attribution = try? await service.attribution
+        let placemark = try? await reverseGeocode(location)
+        let timeZone = placemark?.timeZone ?? .current
         let temperatureC = current.temperature.converted(to: .celsius).value
+        var requestedDays = 0
+        if case .forecast(let days) = request.kind {
+            requestedDays = min(max(days, 0), 5)
+        }
+        if let highlightDay = request.highlightDay, (1...4).contains(highlightDay) {
+            requestedDays = max(requestedDays, highlightDay + 1)
+        }
         var forecast: [AppleWeatherDay] = []
-        if case .forecast(let days) = request.kind, let daily {
+        if requestedDays > 0, let daily {
             let formatter = DateFormatter()
             formatter.dateFormat = "EEE d MMM"
-            let calendar = Calendar.current
-            forecast = daily.forecast.prefix(days).map { day -> AppleWeatherDay in
+            formatter.timeZone = timeZone
+            var calendar = Calendar.current
+            calendar.timeZone = timeZone
+            forecast = daily.forecast.prefix(requestedDays).map { day -> AppleWeatherDay in
                 var label = formatter.string(from: day.date)
                 if calendar.isDateInToday(day.date) {
                     label = "Today " + label
@@ -591,7 +608,12 @@ public final class WeatherKitWeatherService: AppleWeatherService, @unchecked Sen
                     day: label,
                     condition: day.condition.description,
                     highCelsius: day.highTemperature.converted(to: .celsius).value,
-                    lowCelsius: day.lowTemperature.converted(to: .celsius).value
+                    lowCelsius: day.lowTemperature.converted(to: .celsius).value,
+                    date: day.date,
+                    symbolName: day.symbolName,
+                    precipitationChance: day.precipitationChance,
+                    windSpeedKPH: day.wind.speed.converted(to: .kilometersPerHour).value,
+                    uvIndex: day.uvIndex.value
                 )
             }
         }
@@ -608,7 +630,7 @@ public final class WeatherKitWeatherService: AppleWeatherService, @unchecked Sen
                 )
             }
         }
-        let name = (try? await reverseGeocode(location)) ?? "Your location"
+        let name = placemark?.locality ?? "Your location"
         return AppleWeatherSnapshot(
             locationName: name,
             condition: current.condition.description,
@@ -619,7 +641,11 @@ public final class WeatherKitWeatherService: AppleWeatherService, @unchecked Sen
             attributionText: attribution?.legalAttributionText ?? "Weather data provided by Apple Weather.",
             attributionURL: attribution?.legalPageURL,
             attributionImageURL: attribution?.combinedMarkDarkURL,
-            hourly: hourly
+            hourly: hourly,
+            symbolName: current.symbolName,
+            isDaylight: current.isDaylight,
+            observedAt: current.date,
+            timeZoneIdentifier: timeZone.identifier
         )
     }
 
@@ -638,8 +664,8 @@ public final class WeatherKitWeatherService: AppleWeatherService, @unchecked Sen
         }
     }
 
-    private func reverseGeocode(_ location: CLLocation) async throws -> String? {
+    private func reverseGeocode(_ location: CLLocation) async throws -> CLPlacemark? {
         let placemarks = try await geocoder.reverseGeocodeLocation(location)
-        return placemarks.first?.locality
+        return placemarks.first
     }
 }

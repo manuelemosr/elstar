@@ -90,8 +90,10 @@ public nonisolated struct ApplePlaceRecord: Equatable, Sendable {
     /// True when a coordinate exists but reverse geocoding did not produce an
     /// address (honest "address unavailable" state, map still shown).
     public var addressUnavailable: Bool = false
+    /// MapKit place identifier, when the platform provides one (iOS 18+).
+    public var mapItemIdentifier: String? = nil
 
-    public init(id: String, name: String, address: String? = nil, distanceMeters: Double? = nil, website: URL? = nil, latitude: Double, longitude: Double, isCurrentPosition: Bool = false, accuracyMeters: Double? = nil, addressUnavailable: Bool = false) {
+    public init(id: String, name: String, address: String? = nil, distanceMeters: Double? = nil, website: URL? = nil, latitude: Double, longitude: Double, isCurrentPosition: Bool = false, accuracyMeters: Double? = nil, addressUnavailable: Bool = false, mapItemIdentifier: String? = nil) {
         self.id = id
         self.name = name
         self.address = address
@@ -102,6 +104,7 @@ public nonisolated struct ApplePlaceRecord: Equatable, Sendable {
         self.isCurrentPosition = isCurrentPosition
         self.accuracyMeters = accuracyMeters
         self.addressUnavailable = addressUnavailable
+        self.mapItemIdentifier = mapItemIdentifier
     }
 
 }
@@ -118,8 +121,12 @@ public nonisolated struct AppleWeatherSnapshot: Equatable, Sendable {
     public var attributionText: String
     public var attributionURL: URL?
     public var attributionImageURL: URL?
+    public var symbolName: String?
+    public var isDaylight: Bool?
+    public var observedAt: Date?
+    public var timeZoneIdentifier: String?
 
-    public init(locationName: String, condition: String, temperatureCelsius: Double, highCelsius: Double? = nil, lowCelsius: Double? = nil, forecast: [AppleWeatherDay], attributionText: String, attributionURL: URL? = nil, attributionImageURL: URL? = nil, hourly: [AppleWeatherHour] = []) {
+    public init(locationName: String, condition: String, temperatureCelsius: Double, highCelsius: Double? = nil, lowCelsius: Double? = nil, forecast: [AppleWeatherDay], attributionText: String, attributionURL: URL? = nil, attributionImageURL: URL? = nil, hourly: [AppleWeatherHour] = [], symbolName: String? = nil, isDaylight: Bool? = nil, observedAt: Date? = nil, timeZoneIdentifier: String? = nil) {
         self.locationName = locationName
         self.condition = condition
         self.temperatureCelsius = temperatureCelsius
@@ -130,21 +137,35 @@ public nonisolated struct AppleWeatherSnapshot: Equatable, Sendable {
         self.attributionURL = attributionURL
         self.attributionImageURL = attributionImageURL
         self.hourly = hourly
+        self.symbolName = symbolName
+        self.isDaylight = isDaylight
+        self.observedAt = observedAt
+        self.timeZoneIdentifier = timeZoneIdentifier
     }
 
 }
 
-public nonisolated struct AppleWeatherDay: Equatable, Sendable {
+public nonisolated struct AppleWeatherDay: Codable, Equatable, Hashable, Sendable {
     public var day: String
     public var condition: String
     public var highCelsius: Double
     public var lowCelsius: Double
+    public var date: Date?
+    public var symbolName: String?
+    public var precipitationChance: Double?
+    public var windSpeedKPH: Double?
+    public var uvIndex: Int?
 
-    public init(day: String, condition: String, highCelsius: Double, lowCelsius: Double) {
+    public init(day: String, condition: String, highCelsius: Double, lowCelsius: Double, date: Date? = nil, symbolName: String? = nil, precipitationChance: Double? = nil, windSpeedKPH: Double? = nil, uvIndex: Int? = nil) {
         self.day = day
         self.condition = condition
         self.highCelsius = highCelsius
         self.lowCelsius = lowCelsius
+        self.date = date
+        self.symbolName = symbolName
+        self.precipitationChance = precipitationChance
+        self.windSpeedKPH = windSpeedKPH
+        self.uvIndex = uvIndex
     }
 
 }
