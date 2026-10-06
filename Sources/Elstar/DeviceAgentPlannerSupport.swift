@@ -319,10 +319,14 @@ public nonisolated struct DeviceAgentOperationContract: Equatable, Sendable {
     public var optional: [String]
     public var prerequisites: String?
     public var exampleJSON: String
+    /// The exact JSON argument keys this operation accepts. The network planner
+    /// is told only these keys, so a reasoning model is never asked to deliberate
+    /// over the full cross-operation superset.
+    public var argumentFields: [String]
 
     public var family: AppleToolFamily { operation.family }
 
-    public init(operation: AppleToolOperation, localToken: String? = nil, summary: String, required: [String], optional: [String], prerequisites: String? = nil, exampleJSON: String) {
+    public init(operation: AppleToolOperation, localToken: String? = nil, summary: String, required: [String], optional: [String], prerequisites: String? = nil, exampleJSON: String, argumentFields: [String] = []) {
         self.operation = operation
         self.localToken = localToken
         self.summary = summary
@@ -330,6 +334,7 @@ public nonisolated struct DeviceAgentOperationContract: Equatable, Sendable {
         self.optional = optional
         self.prerequisites = prerequisites
         self.exampleJSON = exampleJSON
+        self.argumentFields = argumentFields
     }
 
 }
@@ -346,7 +351,8 @@ public nonisolated enum DeviceAgentOperationCatalog {
             required: [],
             optional: [],
             prerequisites: nil,
-            exampleJSON: "{}"
+            exampleJSON: "{}",
+            argumentFields: []
         ),
         DeviceAgentOperationContract(
             operation: .listReminderLists,
@@ -355,7 +361,8 @@ public nonisolated enum DeviceAgentOperationCatalog {
             required: [],
             optional: [],
             prerequisites: nil,
-            exampleJSON: #"{"operation":"list_lists"}"#
+            exampleJSON: #"{"operation":"list_lists"}"#,
+            argumentFields: ["operation"]
         ),
         DeviceAgentOperationContract(
             operation: .listReminders,
@@ -364,7 +371,8 @@ public nonisolated enum DeviceAgentOperationCatalog {
             required: [],
             optional: ["listName: a reminder list id or a partial list name (optional)"],
             prerequisites: nil,
-            exampleJSON: #"{"operation":"list"}"#
+            exampleJSON: #"{"operation":"list"}"#,
+            argumentFields: ["operation", "listName"]
         ),
         DeviceAgentOperationContract(
             operation: .listCalendarEvents,
@@ -378,7 +386,8 @@ public nonisolated enum DeviceAgentOperationCatalog {
                 "endISO: an explicit range end",
             ],
             prerequisites: nil,
-            exampleJSON: #"{"operation":"list","range":"next7days"}"#
+            exampleJSON: #"{"operation":"list","range":"next7days"}"#,
+            argumentFields: ["operation", "range", "date", "dateISO", "endISO"]
         ),
         DeviceAgentOperationContract(
             operation: .calendarAvailability,
@@ -391,7 +400,8 @@ public nonisolated enum DeviceAgentOperationCatalog {
                 "dateISO and endISO: an explicit range",
             ],
             prerequisites: nil,
-            exampleJSON: #"{"operation":"availability","range":"today"}"#
+            exampleJSON: #"{"operation":"availability","range":"today"}"#,
+            argumentFields: ["operation", "range", "date", "dateISO", "endISO"]
         ),
         DeviceAgentOperationContract(
             operation: .searchNearbyPlaces,
@@ -400,7 +410,8 @@ public nonisolated enum DeviceAgentOperationCatalog {
             required: ["query: the words to search for"],
             optional: ["near: a named place to search around; empty means the current location"],
             prerequisites: nil,
-            exampleJSON: #"{"operation":"search","query":"coffee"}"#
+            exampleJSON: #"{"operation":"search","query":"coffee"}"#,
+            argumentFields: ["operation", "query", "near"]
         ),
         DeviceAgentOperationContract(
             operation: .currentPlace,
@@ -409,7 +420,8 @@ public nonisolated enum DeviceAgentOperationCatalog {
             required: [],
             optional: [],
             prerequisites: nil,
-            exampleJSON: #"{"operation":"current"}"#
+            exampleJSON: #"{"operation":"current"}"#,
+            argumentFields: ["operation"]
         ),
         DeviceAgentOperationContract(
             operation: .directions,
@@ -418,7 +430,8 @@ public nonisolated enum DeviceAgentOperationCatalog {
             required: ["title or identifier: the destination name; use the exact name or id from a places.search result when available"],
             optional: ["mode: driving, walking, or transit (defaults to driving)"],
             prerequisites: "Prefer the exact destination from a places.search result.",
-            exampleJSON: #"{"operation":"directions","title":"Cafe","mode":"walking"}"#
+            exampleJSON: #"{"operation":"directions","title":"Cafe","mode":"walking"}"#,
+            argumentFields: ["operation", "title", "identifier", "mode"]
         ),
         DeviceAgentOperationContract(
             operation: .weather,
@@ -432,7 +445,8 @@ public nonisolated enum DeviceAgentOperationCatalog {
                 "highlightDay: integer 0 to 4, day to highlight in the weather card; 0/today by default, 1/tomorrow; fetches enough daily forecasts automatically",
             ],
             prerequisites: nil,
-            exampleJSON: #"{"location":"Cupertino","days":5,"highlightDay":1}"#
+            exampleJSON: #"{"location":"Cupertino","days":5,"highlightDay":1}"#,
+            argumentFields: ["location", "days", "hours", "highlightDay"]
         ),
         DeviceAgentOperationContract(
             operation: .fetchWebPage,
@@ -441,7 +455,8 @@ public nonisolated enum DeviceAgentOperationCatalog {
             required: ["url: the public http or https address to read"],
             optional: [],
             prerequisites: nil,
-            exampleJSON: #"{"url":"https://example.com/article"}"#
+            exampleJSON: #"{"url":"https://example.com/article"}"#,
+            argumentFields: ["url"]
         ),
     ]
 
@@ -915,11 +930,22 @@ public nonisolated enum DeviceAgentPlannerPrompts {
     }
 
     public static func argumentsJSONInstructions(selection: DeviceAgentStepSelection, now: Date, calendar: Calendar) -> String {
-        let fields = "operation, range, title, identifier, listName, dateISO, endISO, allDay, location, notes, query, near, mode, url, days"
+        let argumentFields: [String]
+        if case .execute(let operation, _, _) = selection {
+            argumentFields = DeviceAgentOperationCatalog.contract(for: operation).argumentFields
+        } else {
+            argumentFields = []
+        }
+        let shape: String
+        if argumentFields.isEmpty {
+            shape = "Reply with only an empty JSON object {}, no prose and no code fences. This operation takes no fields."
+        } else {
+            shape = "Reply with only a JSON object with the fields that apply, no prose and no code fences. Fields: \(argumentFields.joined(separator: ", ")). Omit fields that do not apply."
+        }
         return """
         \(argumentsInstructions(selection: selection, now: now, calendar: calendar))
 
-        Reply with only a JSON object with the fields that apply, no prose and no code fences. Fields: \(fields). Omit fields that do not apply.
+        \(shape)
         """
     }
 
