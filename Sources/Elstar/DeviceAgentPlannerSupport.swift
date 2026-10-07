@@ -84,6 +84,12 @@ public nonisolated struct DeviceAgentArguments: Equatable, Sendable, Codable {
     public var hours: Int?
     public var highlightDay: Int?
     public var expression: String?
+    public var startDate: String?
+    public var endDate: String?
+    public var albumName: String?
+    public var favoritesOnly: Bool?
+    public var screenshotsOnly: Bool?
+    public var limit: Int?
 
     public init(
         operation: String? = nil,
@@ -112,7 +118,13 @@ public nonisolated struct DeviceAgentArguments: Equatable, Sendable, Codable {
         days: Int? = nil,
         hours: Int? = nil,
         highlightDay: Int? = nil,
-        expression: String? = nil
+        expression: String? = nil,
+        startDate: String? = nil,
+        endDate: String? = nil,
+        albumName: String? = nil,
+        favoritesOnly: Bool? = nil,
+        screenshotsOnly: Bool? = nil,
+        limit: Int? = nil
     ) {
         self.operation = operation
         self.range = range
@@ -141,6 +153,12 @@ public nonisolated struct DeviceAgentArguments: Equatable, Sendable, Codable {
         self.hours = hours
         self.highlightDay = highlightDay
         self.expression = expression
+        self.startDate = startDate
+        self.endDate = endDate
+        self.albumName = albumName
+        self.favoritesOnly = favoritesOnly
+        self.screenshotsOnly = screenshotsOnly
+        self.limit = limit
     }
 }
 
@@ -347,6 +365,14 @@ public nonisolated struct DeviceAgentOperationContract: Equatable, Sendable {
 /// call gets only the selected operation's detailed contract.
 public nonisolated enum DeviceAgentOperationCatalog {
     public static let all: [DeviceAgentOperationContract] = [
+        DeviceAgentOperationContract(
+            operation: .findPhotos,
+            summary: "find accessible photos by metadata only, newest first; cannot search subjects, faces or image contents",
+            required: [],
+            optional: ["date: YYYY-MM-DD, or startDate and endDate (exclusive) in YYYY-MM-DD; device time zone", "albumName: exact user album name", "favoritesOnly and screenshotsOnly: boolean filters", "limit: 1-24, default 12"],
+            exampleJSON: #"{"screenshotsOnly":true,"limit":12}"#,
+            argumentFields: ["date", "startDate", "endDate", "albumName", "favoritesOnly", "screenshotsOnly", "limit"]
+        ),
         DeviceAgentOperationContract(
             operation: .calculate,
             summary: "evaluate everyday arithmetic locally with decimal precision; use for numeric computations",
@@ -618,6 +644,13 @@ public nonisolated enum DeviceAgentRequestBuilder {
     ) -> DeviceAgentConversion {
         _ = goalID
         switch family {
+        case "photos":
+            guard args.query == nil, args.location == nil else { return .askUser("Photos can be filtered by date, album, favorites or screenshots. Which filter would you like?") }
+            do {
+                let query = try ApplePhotosArguments(date: args.date, startDate: args.startDate, endDate: args.endDate, albumName: args.albumName, favoritesOnly: args.favoritesOnly, screenshotsOnly: args.screenshotsOnly, limit: args.limit).query(calendar: calendar)
+                return .request(.findPhotos(query))
+            } catch let error as AppleToolError { return .askUser(error.userMessage) }
+            catch { return .askUser("Choose a valid photo metadata filter.") }
         case "calculator":
             guard let expression = args.expression?.trimmingCharacters(in: .whitespacesAndNewlines), !expression.isEmpty else {
                 return .askUser("What expression should I calculate?")
@@ -754,6 +787,7 @@ public nonisolated enum DeviceAgentRequestBuilder {
             return .request(.searchNearbyPlaces(AppleNearbyPlacesRequest(
                 query: query,
                 anchor: AppleToolArgumentParsing.anchor(named: args.near),
+                limit: 10
             )))
         case "directions":
             guard let name = args.title ?? args.identifier else { return .askUser("Which place should I route to?") }

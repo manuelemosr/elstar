@@ -46,6 +46,13 @@ public nonisolated enum DeveloperChatToolArguments {
         switch request {
         case .currentTime, .listReminderLists:
             break
+        case .findPhotos(let query):
+            if let start = query.start { fields["start"] = iso.string(from: start) }
+            if let end = query.end { fields["end"] = iso.string(from: end) }
+            if let album = query.albumName { fields["albumName"] = album }
+            fields["favoritesOnly"] = String(query.favoritesOnly)
+            fields["screenshotsOnly"] = String(query.screenshotsOnly)
+            fields["limit"] = String(query.limit)
         case .calculate(let expression):
             fields["expression"] = expression
         case .listReminders(let listID):

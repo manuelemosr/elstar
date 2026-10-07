@@ -124,7 +124,7 @@ public nonisolated final class AppleToolExecutor: AppleToolDispatching, @uncheck
 #if DEBUG
             developerRecorder?.recordToolResult(turnID: messageID, callID: operationID, operation: request.operation.rawValue, status: result.status.rawValue, summary: result.summary, structured: DeveloperChatToolArguments.result(result), conversationKey: key.absoluteKey)
 #endif
-            emit(.completed, operationID: operationID, name: toolName, detail: result.items.first?.subtitle, output: result.modelText, map: result.mapPresentation, directions: result.directionsPresentation, weather: result.weatherPresentation)
+            emit(.completed, operationID: operationID, name: toolName, detail: result.items.first?.subtitle, output: result.modelText, map: result.mapPresentation, directions: result.directionsPresentation, weather: result.weatherPresentation, photos: result.photosPresentation)
             return result
         } catch let error as AppleToolError {
             let status = request.operation == .calculate ? AppleToolStatus.failed : AppleToolStatus(error: error)
@@ -329,6 +329,16 @@ public nonisolated final class AppleToolExecutor: AppleToolDispatching, @uncheck
                 )
             )
 
+        case .findPhotos(let query):
+            let presentation = try await services.photos.find(query)
+            let count = presentation.photos.count
+            var summary = count == 0 ? "No matching photos were found in the accessible library." : "Found \(count) matching \(count == 1 ? "photo" : "photos"), newest first."
+            if presentation.limitedAccess { summary += " Access is limited to the photos you selected." }
+            if presentation.hasMore { summary += " More matches are available; narrow the date range or album." }
+            let items = presentation.photos.map { photo in
+                AppleToolDisplayItem(title: photo.isScreenshot ? "Screenshot" : "Photo", subtitle: photo.creationDate.map { AppleDateFormatting.spoken($0, calendar: calendar) }, detail: "\(photo.pixelWidth) x \(photo.pixelHeight)\(photo.isFavorite ? ", favorite" : "")")
+            }
+            return AppleToolResult(summary: summary, items: items, photosPresentation: presentation)
         case .calculate(let expression):
             let calculation = try AppleCalculator.evaluate(expression)
             let suffix = calculation.isApproximate ? " (approximate - decimal precision limit)" : ""
@@ -419,7 +429,7 @@ public nonisolated final class AppleToolExecutor: AppleToolDispatching, @uncheck
         return AppleMapPresentation(results: results, sourceTimestamp: timestamp, accuracyMeters: accuracy, addressUnavailable: addressUnavailable)
     }
 
-    private func emit(_ status: ToolActivity.Status, operationID: String, name: String, detail: String?, output: String? = nil, map: AppleMapPresentation? = nil, directions: AppleDirectionsPresentation? = nil, weather: AppleWeatherPresentation? = nil) {
+    private func emit(_ status: ToolActivity.Status, operationID: String, name: String, detail: String?, output: String? = nil, map: AppleMapPresentation? = nil, directions: AppleDirectionsPresentation? = nil, weather: AppleWeatherPresentation? = nil, photos: ApplePhotosPresentation? = nil) {
         sink.toolDelta(key, messageID: messageID, part: ToolActivity(
             id: operationID,
             name: name,
@@ -429,7 +439,8 @@ public nonisolated final class AppleToolExecutor: AppleToolDispatching, @uncheck
             startedAt: clock.now(),
             mapPresentation: map,
             directionsPresentation: directions,
-            weatherPresentation: weather
+            weatherPresentation: weather,
+            photosPresentation: photos
         ))
     }
 }
@@ -464,6 +475,7 @@ nonisolated extension AppleToolRequest {
         case .fetchWebPage: "Read web page"
         case .currentTime: "Get current time"
         case .calculate: "Calculate"
+        case .findPhotos: "Find photos"
         case .currentPlace: "Find current place"
         }
     }

@@ -7,7 +7,7 @@ struct AppleToolDomainTests {
 
     @Test("The catalog has exactly the supported families and no removed ones")
     func catalogFamilies() {
-        #expect(Set(AppleToolFamily.allCases) == [.reminders, .calendar, .places, .weather, .webfetch, .time, .calculator])
+        #expect(Set(AppleToolFamily.allCases) == [.reminders, .calendar, .places, .weather, .webfetch, .time, .calculator, .photos])
     }
 
     @Test("The built-in catalog has no mutating operations")
@@ -25,10 +25,11 @@ struct AppleToolDomainTests {
     }
 
     @Test("Request family and operation map back to their concrete identity")
-    func requestIdentity() {
+    func requestIdentity() throws {
         let requests: [AppleToolRequest] = [
             .currentTime,
             .calculate(expression: "1+2"),
+            .findPhotos(try ApplePhotosQuery()),
             .listReminderLists,
             .listReminders(listID: "home"),
             .listCalendarEvents(AppleCalendarRangeQuery(start: .init(), end: .init())),

@@ -13,6 +13,7 @@ public nonisolated enum AppleToolFamily: String, CaseIterable, Codable, Sendable
     case webfetch
     case time
     case calculator
+    case photos
 
     public var displayName: String {
         switch self {
@@ -23,6 +24,7 @@ public nonisolated enum AppleToolFamily: String, CaseIterable, Codable, Sendable
         case .webfetch: "Web page"
         case .time: "Time"
         case .calculator: "Calculator"
+        case .photos: "Photos"
         }
     }
 }
@@ -36,6 +38,7 @@ public nonisolated enum AppleToolFamily: String, CaseIterable, Codable, Sendable
 public nonisolated enum AppleToolOperation: String, CaseIterable, Codable, Sendable {
     case currentTime = "time.current"
     case calculate = "calculator.evaluate"
+    case findPhotos = "photos.find"
     case listReminderLists = "reminders.list_lists"
     case listReminders = "reminders.list"
     case listCalendarEvents = "calendar.list"
@@ -59,6 +62,7 @@ public nonisolated enum AppleToolOperation: String, CaseIterable, Codable, Senda
         switch self {
         case .currentTime: .time
         case .calculate: .calculator
+        case .findPhotos: .photos
         case .listReminderLists, .listReminders: .reminders
         case .listCalendarEvents, .calendarAvailability: .calendar
         case .searchNearbyPlaces, .currentPlace, .directions: .places
@@ -71,6 +75,7 @@ public nonisolated enum AppleToolOperation: String, CaseIterable, Codable, Senda
         switch self {
         case .currentTime: "current time"
         case .calculate: "calculate an expression"
+        case .findPhotos: "find photos by metadata"
         case .listReminderLists: "list reminder lists"
         case .listReminders: "list reminders"
         case .listCalendarEvents: "list calendar events"
@@ -146,6 +151,7 @@ public nonisolated enum AppleToolRequest: Equatable, Sendable {
     // Time
     case currentTime
     case calculate(expression: String)
+    case findPhotos(ApplePhotosQuery)
     // Current place
     case currentPlace(AppleCurrentPlaceRequest)
 
@@ -158,6 +164,7 @@ public nonisolated enum AppleToolRequest: Equatable, Sendable {
         case .fetchWebPage: .webfetch
         case .currentTime: .time
         case .calculate: .calculator
+        case .findPhotos: .photos
         }
     }
 
@@ -179,6 +186,7 @@ public nonisolated enum AppleToolRequest: Equatable, Sendable {
         case .fetchWebPage: .fetchWebPage
         case .currentTime: .currentTime
         case .calculate: .calculate
+        case .findPhotos: .findPhotos
         }
     }
 
@@ -452,8 +460,9 @@ public nonisolated struct AppleToolResult: Equatable, Sendable {
     public var directionsPresentation: AppleDirectionsPresentation?
     /// Structured, persistable WeatherKit attribution for the weather card.
     public var weatherPresentation: AppleWeatherPresentation?
+    public var photosPresentation: ApplePhotosPresentation?
 
-    public init(summary: String, items: [AppleToolDisplayItem] = [], receipt: AppleToolReceipt? = nil, status: AppleToolStatus = .confirmed, mapPresentation: AppleMapPresentation? = nil, directionsPresentation: AppleDirectionsPresentation? = nil, weatherPresentation: AppleWeatherPresentation? = nil) {
+    public init(summary: String, items: [AppleToolDisplayItem] = [], receipt: AppleToolReceipt? = nil, status: AppleToolStatus = .confirmed, mapPresentation: AppleMapPresentation? = nil, directionsPresentation: AppleDirectionsPresentation? = nil, weatherPresentation: AppleWeatherPresentation? = nil, photosPresentation: ApplePhotosPresentation? = nil) {
         self.summary = summary
         self.items = items
         self.receipt = receipt
@@ -461,6 +470,7 @@ public nonisolated struct AppleToolResult: Equatable, Sendable {
         self.mapPresentation = mapPresentation
         self.directionsPresentation = directionsPresentation
         self.weatherPresentation = weatherPresentation
+        self.photosPresentation = photosPresentation
     }
 
     /// The bounded text placed in the model transcript / tool card.

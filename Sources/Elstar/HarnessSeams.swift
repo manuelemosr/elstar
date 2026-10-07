@@ -87,8 +87,9 @@ public nonisolated struct ToolActivity: Equatable, Hashable, Sendable, Codable {
     public var directionsPresentation: AppleDirectionsPresentation?
     /// Structured, persisted WeatherKit attribution for a weather read. Additive and optional so old documents decode unchanged.
     public var weatherPresentation: AppleWeatherPresentation?
+    public var photosPresentation: ApplePhotosPresentation?
 
-    public init(id: String, name: String, status: Status, detail: String? = nil, outputExcerpt: String? = nil, startedAt: Date? = nil, mapPresentation: AppleMapPresentation? = nil, directionsPresentation: AppleDirectionsPresentation? = nil, weatherPresentation: AppleWeatherPresentation? = nil) {
+    public init(id: String, name: String, status: Status, detail: String? = nil, outputExcerpt: String? = nil, startedAt: Date? = nil, mapPresentation: AppleMapPresentation? = nil, directionsPresentation: AppleDirectionsPresentation? = nil, weatherPresentation: AppleWeatherPresentation? = nil, photosPresentation: ApplePhotosPresentation? = nil) {
         self.id = id
         self.name = name
         self.status = status
@@ -98,6 +99,7 @@ public nonisolated struct ToolActivity: Equatable, Hashable, Sendable, Codable {
         self.mapPresentation = mapPresentation
         self.directionsPresentation = directionsPresentation
         self.weatherPresentation = weatherPresentation
+        self.photosPresentation = photosPresentation
     }
 
     /// Repository documents persist messages verbatim, so the persisted field
@@ -110,6 +112,7 @@ public nonisolated struct ToolActivity: Equatable, Hashable, Sendable, Codable {
         case mapPresentation = "map_presentation"
         case directionsPresentation = "directions_presentation"
         case weatherPresentation = "weather_presentation"
+        case photosPresentation = "photos_presentation"
     }
 
     public init(from decoder: Decoder) throws {
@@ -123,6 +126,7 @@ public nonisolated struct ToolActivity: Equatable, Hashable, Sendable, Codable {
         mapPresentation = try container.decodeIfPresent(AppleMapPresentation.self, forKey: .mapPresentation)
         directionsPresentation = try container.decodeIfPresent(AppleDirectionsPresentation.self, forKey: .directionsPresentation)
         weatherPresentation = try container.decodeIfPresent(AppleWeatherPresentation.self, forKey: .weatherPresentation)
+        photosPresentation = try container.decodeIfPresent(ApplePhotosPresentation.self, forKey: .photosPresentation)
     }
 }
 

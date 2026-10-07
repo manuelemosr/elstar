@@ -134,6 +134,7 @@ Elstar. An app can present friendlier names to the model.
 | Operation ID | What it reads or prepares | Apple API |
 | --- | --- | --- |
 | `time.current` | Local date, time, and time zone | Foundation |
+| `photos.find` | Images by date, album, favorites and screenshots, metadata only | PhotoKit |
 | `calculator.evaluate` | Everyday arithmetic with decimal precision | Foundation Decimal |
 | `reminders.list_lists` | Reminder lists | EventKit |
 | `reminders.list` | Open reminders and due dates | EventKit |
@@ -153,6 +154,7 @@ arithmetic and values outside the calculator's decimal range fail honestly;
 precision-limited results are marked approximate. It executes locally without
 permissions, networking or executable-code evaluation.
 
+Photos searches return bounded metadata and a separate presentation payload for host UI. They do not search subjects, faces, text or locations. Enable `PhotoKitPhotosService()` and provide `NSPhotoLibraryUsageDescription`; limited access only searches authorized assets. The host loads images locally for display.
 
 ## Connect it to your app
 

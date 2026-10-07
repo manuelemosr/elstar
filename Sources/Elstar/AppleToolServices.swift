@@ -267,13 +267,15 @@ public nonisolated struct AppleToolServices: @unchecked Sendable {
     public var places: any ApplePlacesService
     public var weather: any AppleWeatherService
     public var webFetch: any AppleWebFetchService
+    public var photos: any ApplePhotosService
 
-    public init(reminders: any AppleRemindersService, calendar: any AppleCalendarService, places: any ApplePlacesService, weather: any AppleWeatherService, webFetch: any AppleWebFetchService) {
+    public init(reminders: any AppleRemindersService, calendar: any AppleCalendarService, places: any ApplePlacesService, weather: any AppleWeatherService, webFetch: any AppleWebFetchService, photos: any ApplePhotosService = UnavailableApplePhotosService()) {
         self.reminders = reminders
         self.calendar = calendar
         self.places = places
         self.weather = weather
         self.webFetch = webFetch
+        self.photos = photos
     }
 
     /// A tool set whose every operation fails honestly as unavailable. Used
