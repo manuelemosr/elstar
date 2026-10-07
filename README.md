@@ -134,6 +134,7 @@ Elstar. An app can present friendlier names to the model.
 | Operation ID | What it reads or prepares | Apple API |
 | --- | --- | --- |
 | `time.current` | Local date, time, and time zone | Foundation |
+| `calculator.evaluate` | Everyday arithmetic with decimal precision | Foundation Decimal |
 | `reminders.list_lists` | Reminder lists | EventKit |
 | `reminders.list` | Open reminders and due dates | EventKit |
 | `calendar.list` | Events for a day or date range | EventKit |
@@ -143,6 +144,15 @@ Elstar. An app can present friendlier names to the model.
 | `places.directions` | A destination for the app's map chooser | MapKit |
 | `weather.current` | Current weather or a forecast | WeatherKit |
 | `webfetch.read` | Text and links from one public HTTPS page | URLSession |
+
+Calculator expressions support decimal/scientific numbers, `+ - * /`, parentheses,
+unary signs, postfix `%` (division by 100), and integer powers with `^`.
+For example, `250*18%+37.5` returns `82.5`. Expressions are limited to 512 bytes,
+128 tokens and 32 nesting levels; exponents range from -1000 to 1000. Invalid
+arithmetic and values outside the calculator's decimal range fail honestly;
+precision-limited results are marked approximate. It executes locally without
+permissions, networking or executable-code evaluation.
+
 
 ## Connect it to your app
 

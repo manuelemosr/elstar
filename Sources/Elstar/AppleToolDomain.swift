@@ -2,7 +2,7 @@ import Foundation
 
 // MARK: - Tool families
 
-/// The six on-device capability families the harness can execute. They are
+/// The seven on-device capability families the harness can execute. They are
 /// exposed to a planner as a small number of compact tools, each carrying
 /// several bounded operations, rather than dozens of schemas.
 public nonisolated enum AppleToolFamily: String, CaseIterable, Codable, Sendable {
@@ -12,6 +12,7 @@ public nonisolated enum AppleToolFamily: String, CaseIterable, Codable, Sendable
     case weather
     case webfetch
     case time
+    case calculator
 
     public var displayName: String {
         switch self {
@@ -21,6 +22,7 @@ public nonisolated enum AppleToolFamily: String, CaseIterable, Codable, Sendable
         case .weather: "Weather"
         case .webfetch: "Web page"
         case .time: "Time"
+        case .calculator: "Calculator"
         }
     }
 }
@@ -33,6 +35,7 @@ public nonisolated enum AppleToolFamily: String, CaseIterable, Codable, Sendable
 /// a list-reminders goal.
 public nonisolated enum AppleToolOperation: String, CaseIterable, Codable, Sendable {
     case currentTime = "time.current"
+    case calculate = "calculator.evaluate"
     case listReminderLists = "reminders.list_lists"
     case listReminders = "reminders.list"
     case listCalendarEvents = "calendar.list"
@@ -55,6 +58,7 @@ public nonisolated enum AppleToolOperation: String, CaseIterable, Codable, Senda
     public var family: AppleToolFamily {
         switch self {
         case .currentTime: .time
+        case .calculate: .calculator
         case .listReminderLists, .listReminders: .reminders
         case .listCalendarEvents, .calendarAvailability: .calendar
         case .searchNearbyPlaces, .currentPlace, .directions: .places
@@ -66,6 +70,7 @@ public nonisolated enum AppleToolOperation: String, CaseIterable, Codable, Senda
     public var displayName: String {
         switch self {
         case .currentTime: "current time"
+        case .calculate: "calculate an expression"
         case .listReminderLists: "list reminder lists"
         case .listReminders: "list reminders"
         case .listCalendarEvents: "list calendar events"
@@ -140,6 +145,7 @@ public nonisolated enum AppleToolRequest: Equatable, Sendable {
     case fetchWebPage(AppleFetchWebPageRequest)
     // Time
     case currentTime
+    case calculate(expression: String)
     // Current place
     case currentPlace(AppleCurrentPlaceRequest)
 
@@ -151,6 +157,7 @@ public nonisolated enum AppleToolRequest: Equatable, Sendable {
         case .weather: .weather
         case .fetchWebPage: .webfetch
         case .currentTime: .time
+        case .calculate: .calculator
         }
     }
 
@@ -171,6 +178,7 @@ public nonisolated enum AppleToolRequest: Equatable, Sendable {
         case .weather: .weather
         case .fetchWebPage: .fetchWebPage
         case .currentTime: .currentTime
+        case .calculate: .calculate
         }
     }
 

@@ -46,6 +46,8 @@ public nonisolated enum DeveloperChatToolArguments {
         switch request {
         case .currentTime, .listReminderLists:
             break
+        case .calculate(let expression):
+            fields["expression"] = expression
         case .listReminders(let listID):
             if let listID { fields["listID"] = listID }
         case .listCalendarEvents(let q), .calendarAvailability(let q):

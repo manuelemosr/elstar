@@ -83,6 +83,7 @@ public nonisolated struct DeviceAgentArguments: Equatable, Sendable, Codable {
     public var days: Int?
     public var hours: Int?
     public var highlightDay: Int?
+    public var expression: String?
 
     public init(
         operation: String? = nil,
@@ -110,7 +111,8 @@ public nonisolated struct DeviceAgentArguments: Equatable, Sendable, Codable {
         durationMinutes: Int? = nil,
         days: Int? = nil,
         hours: Int? = nil,
-        highlightDay: Int? = nil
+        highlightDay: Int? = nil,
+        expression: String? = nil
     ) {
         self.operation = operation
         self.range = range
@@ -138,6 +140,7 @@ public nonisolated struct DeviceAgentArguments: Equatable, Sendable, Codable {
         self.days = days
         self.hours = hours
         self.highlightDay = highlightDay
+        self.expression = expression
     }
 }
 
@@ -344,6 +347,14 @@ public nonisolated struct DeviceAgentOperationContract: Equatable, Sendable {
 /// call gets only the selected operation's detailed contract.
 public nonisolated enum DeviceAgentOperationCatalog {
     public static let all: [DeviceAgentOperationContract] = [
+        DeviceAgentOperationContract(
+            operation: .calculate,
+            summary: "evaluate everyday arithmetic locally with decimal precision; use for numeric computations",
+            required: ["expression: decimal or scientific numbers, + - * /, parentheses, unary signs, postfix % (divide by 100), integer ^; at most 512 bytes"],
+            optional: [],
+            exampleJSON: #"{"expression":"250*18%+37.5"}"#,
+            argumentFields: ["expression"]
+        ),
         DeviceAgentOperationContract(
             operation: .currentTime,
             localToken: nil,
@@ -607,6 +618,14 @@ public nonisolated enum DeviceAgentRequestBuilder {
     ) -> DeviceAgentConversion {
         _ = goalID
         switch family {
+        case "calculator":
+            guard let expression = args.expression?.trimmingCharacters(in: .whitespacesAndNewlines), !expression.isEmpty else {
+                return .askUser("What expression should I calculate?")
+            }
+            guard expression.utf8.count <= 512 else {
+                return .askUser("Please use an expression of at most 512 bytes.")
+            }
+            return .request(.calculate(expression: expression))
         case "time":
             return .request(.currentTime)
 
@@ -735,7 +754,6 @@ public nonisolated enum DeviceAgentRequestBuilder {
             return .request(.searchNearbyPlaces(AppleNearbyPlacesRequest(
                 query: query,
                 anchor: AppleToolArgumentParsing.anchor(named: args.near),
-                limit: 10
             )))
         case "directions":
             guard let name = args.title ?? args.identifier else { return .askUser("Which place should I route to?") }
@@ -764,7 +782,7 @@ public nonisolated enum DeviceAgentPlannerPrompts {
         """
         You plan a single request. Decide whether answering requires real device data or an action, or is ordinary conversation.
         \(assistantName) runs on the person's iPhone and can execute real tools there even when you are a remote model. Your own lack of direct OS access is never a reason to choose conversation or to refuse.
-        Actionable (choose goals): reading the current time; reading weather, location or nearby places, calendar, or reminders; reading a public web page the person names; and preparing directions to a place.
+        Actionable (choose goals): computing numeric results with calculator.evaluate; reading the current time; reading weather, location or nearby places, calendar, or reminders; reading a public web page the person names; and preparing directions to a place.
         Conversation (no goals): explanations, opinions, coding help, general knowledge, greetings, and hypothetical examples that are not real device requests. Missing details do not make a request conversation: choose the goal and the app gathers the missing detail through the tools.
         When actionable, list the distinct required goals (the real operations the request needs) using the exact operation ids, not auxiliary reads.
         Examples:
@@ -773,6 +791,7 @@ public nonisolated enum DeviceAgentPlannerPrompts {
         - "What's the weather this evening?" -> actionable, goal weather.current.
         - "How do I write a for loop in Swift?" -> conversation, no goals.
         - "If I listed my reminders, what would you see?" -> conversation, no goals, because it is hypothetical.
+        Use the calculator for numeric computations, including arithmetic on earlier tool results. Preserve its returned result and approximation warning; a failed calculation is not an answer. Percent means division by 100; an 18% increase is 250*(1+18%).
         Operation catalog:
         \(DeviceAgentOperationCatalog.compactPlannerCatalog())
         """

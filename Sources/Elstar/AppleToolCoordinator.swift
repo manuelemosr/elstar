@@ -127,7 +127,7 @@ public nonisolated final class AppleToolExecutor: AppleToolDispatching, @uncheck
             emit(.completed, operationID: operationID, name: toolName, detail: result.items.first?.subtitle, output: result.modelText, map: result.mapPresentation, directions: result.directionsPresentation, weather: result.weatherPresentation)
             return result
         } catch let error as AppleToolError {
-            let status = AppleToolStatus(error: error)
+            let status = request.operation == .calculate ? AppleToolStatus.failed : AppleToolStatus(error: error)
             let result = AppleToolResult(summary: Self.recoveryText(for: error), status: status)
             if request.isMutation {
                 // A possibly-committed write is sticky: record it both in the
@@ -329,6 +329,11 @@ public nonisolated final class AppleToolExecutor: AppleToolDispatching, @uncheck
                 )
             )
 
+        case .calculate(let expression):
+            let calculation = try AppleCalculator.evaluate(expression)
+            let suffix = calculation.isApproximate ? " (approximate - decimal precision limit)" : ""
+            return AppleToolResult(summary: "\(calculation.expression) = \(calculation.value)" + suffix)
+
         case .currentTime:
             let instant = clock.now()
             let summary = AppleCurrentTime.summarize(now: instant, calendar: calendar)
@@ -458,6 +463,7 @@ nonisolated extension AppleToolRequest {
         case .weather: "Get weather"
         case .fetchWebPage: "Read web page"
         case .currentTime: "Get current time"
+        case .calculate: "Calculate"
         case .currentPlace: "Find current place"
         }
     }
@@ -465,6 +471,7 @@ nonisolated extension AppleToolRequest {
     public var activityDetail: String? {
         switch self {
         case .searchNearbyPlaces(let r): r.query
+        case .calculate(let expression): String(expression.prefix(512))
         case .fetchWebPage(let r): r.url.host(percentEncoded: false)
         case .weather(let r): r.anchor.key
         default: nil

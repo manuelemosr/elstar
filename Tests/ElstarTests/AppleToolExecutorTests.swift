@@ -105,4 +105,19 @@ struct AppleToolExecutorTests {
         #expect(AppleToolExecutor.recoveryText(for: .uncertain("maybe")).contains("uncertain"))
         #expect(AppleToolExecutor.recoveryText(for: .cancelled).contains("nothing changed"))
     }
+    @Test("Calculator preserves success and failure through the executor")
+    func calculatorExecution() async {
+        let sink = RecordingEventSink()
+        let executor = makeExecutor(services: .fake(), sink: sink, tracker: RecordingTracker(), confirmations: AppleConfirmationStore(), journal: makeJournal())
+        let success = await executor.perform(.calculate(expression: "250*18%+37.5"))
+        #expect(success?.status == .confirmed)
+        #expect(success?.summary == "250*18%+37.5 = 82.5")
+        #expect(success?.receipt == nil)
+        let other = await executor.perform(.calculate(expression: "2+2"))
+        #expect(other?.summary == "2+2 = 4")
+        let failure = await executor.perform(.calculate(expression: "1/0"))
+        #expect(failure?.status == .failed)
+        #expect(failure?.receipt == nil)
+    }
+
 }
