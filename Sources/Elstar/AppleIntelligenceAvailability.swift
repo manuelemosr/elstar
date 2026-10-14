@@ -15,11 +15,23 @@ public nonisolated struct AppleIntelligenceAvailability: Equatable, Sendable {
     /// Concrete next step ("Open Settings -> Apple Intelligence & Siri and turn
     /// it on."). Never a fake success.
     public var recovery: String?
+    /// Whether this device's hardware and OS can host the on-device model at
+    /// all, independent of the current toggle or download state. When false
+    /// the connection is not offered on this device (local servers only);
+    /// transient states like "turned off" or "still downloading" keep it true.
+    public var deviceEligible: Bool
+
+    public init(status: Status, reason: String?, recovery: String?, deviceEligible: Bool = true) {
+        self.status = status
+        self.reason = reason
+        self.recovery = recovery
+        self.deviceEligible = deviceEligible
+    }
 
     public static let available = AppleIntelligenceAvailability(status: .available, reason: nil, recovery: nil)
 
-    public static func unavailable(reason: String, recovery: String?) -> AppleIntelligenceAvailability {
-        AppleIntelligenceAvailability(status: .unavailable, reason: reason, recovery: recovery)
+    public static func unavailable(reason: String, recovery: String?, deviceEligible: Bool = true) -> AppleIntelligenceAvailability {
+        AppleIntelligenceAvailability(status: .unavailable, reason: reason, recovery: recovery, deviceEligible: deviceEligible)
     }
 
     public var isAvailable: Bool { status == .available }
