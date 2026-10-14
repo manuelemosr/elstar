@@ -15,10 +15,11 @@ public nonisolated struct AppleIntelligenceAvailability: Equatable, Sendable {
     /// Concrete next step ("Open Settings -> Apple Intelligence & Siri and turn
     /// it on."). Never a fake success.
     public var recovery: String?
-    /// Whether this device's hardware and OS can host the on-device model at
-    /// all, independent of the current toggle or download state. When false
-    /// the connection is not offered on this device (local servers only);
-    /// transient states like "turned off" or "still downloading" keep it true.
+    /// Whether this device's hardware and OS can host the ADVANCED
+    /// on-device variant (AFM 3 Core Advanced) at all, independent of the
+    /// current toggle or download state. Informational metadata for
+    /// per-device model options; the Apple Intelligence connection itself
+    /// is available on every eligible iPhone either way.
     public var deviceEligible: Bool
 
     public init(status: Status, reason: String?, recovery: String?, deviceEligible: Bool = true) {
