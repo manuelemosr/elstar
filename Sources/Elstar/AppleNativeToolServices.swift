@@ -631,12 +631,28 @@ public final class WeatherKitWeatherService: AppleWeatherService, @unchecked Sen
             }
         }
         let name = placemark?.locality ?? "Your location"
+        // (a) The day the person asked about drives the headline high/low, so
+        // the model-facing text and the card agree instead of always reporting
+        // today's numbers under a future day's label. Matched by real calendar
+        // day in the location's timezone, never by array index.
+        var highlightedDay: AppleWeatherDay?
+        if let highlightDay = request.highlightDay, (1...4).contains(highlightDay) {
+            var dayCalendar = Calendar(identifier: .gregorian)
+            dayCalendar.timeZone = timeZone
+            if let target = dayCalendar.date(byAdding: .day, value: highlightDay, to: current.date) {
+                highlightedDay = forecast.first { day in
+                    guard let date = day.date else { return false }
+                    return dayCalendar.isDate(date, inSameDayAs: target)
+                }
+            }
+        }
+        let headline = highlightedDay ?? forecast.first
         return AppleWeatherSnapshot(
             locationName: name,
             condition: current.condition.description,
             temperatureCelsius: temperatureC,
-            highCelsius: daily?.forecast.first.map { $0.highTemperature.converted(to: .celsius).value },
-            lowCelsius: daily?.forecast.first.map { $0.lowTemperature.converted(to: .celsius).value },
+            highCelsius: headline?.highCelsius ?? daily?.forecast.first.map { $0.highTemperature.converted(to: .celsius).value },
+            lowCelsius: headline?.lowCelsius ?? daily?.forecast.first.map { $0.lowTemperature.converted(to: .celsius).value },
             forecast: forecast,
             attributionText: attribution?.legalAttributionText ?? "Weather data provided by Apple Weather.",
             attributionURL: attribution?.legalPageURL,

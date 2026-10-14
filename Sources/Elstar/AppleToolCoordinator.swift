@@ -354,9 +354,41 @@ public nonisolated final class AppleToolExecutor: AppleToolDispatching, @uncheck
 
         case .weather(let weatherRequest):
             let snapshot = try await services.weather.weather(for: weatherRequest)
+            // The day the person asked about (planner-provided highlightDay)
+            // leads the text, and the fetched window is stated explicitly, so
+            // the model can only describe days that really exist. The same
+            // real-date match (never an array index) drives the card highlight.
+            var dayCalendar = Calendar(identifier: .gregorian)
+            if let timeZoneID = snapshot.timeZoneIdentifier, let timeZone = TimeZone(identifier: timeZoneID) {
+                dayCalendar.timeZone = timeZone
+            } else {
+                dayCalendar.timeZone = .current
+            }
+            let reference = snapshot.observedAt ?? clock.now()
+            var highlighted: AppleWeatherDay?
+            var highlightedDate: Date?
+            if let offset = weatherRequest.highlightDay, (1...4).contains(offset),
+               let target = dayCalendar.date(byAdding: .day, value: offset, to: reference) {
+                highlighted = snapshot.forecast.first { day in
+                    guard let date = day.date else { return false }
+                    return dayCalendar.isDate(date, inSameDayAs: target)
+                }
+                highlightedDate = highlighted?.date
+            }
+            let subject = highlighted ?? snapshot.forecast.first
             var summary = "\(snapshot.locationName): \(snapshot.condition), \(Int(snapshot.temperatureCelsius.rounded()))°C"
-            if let high = snapshot.highCelsius, let low = snapshot.lowCelsius {
+            if let subject {
+                // A fetched day makes "now" explicit: the high/low that follows
+                // belongs to that day, never to the current conditions.
+                summary += " now. \(subject.day): \(subject.condition), H \(Int(subject.highCelsius.rounded()))° L \(Int(subject.lowCelsius.rounded()))°"
+            } else if let high = snapshot.highCelsius, let low = snapshot.lowCelsius {
                 summary += " (H \(Int(high.rounded()))° L \(Int(low.rounded()))°)"
+            }
+            if !snapshot.forecast.isEmpty {
+                summary += ". Days fetched: \(snapshot.forecast.map(\.day).joined(separator: "; "))"
+                if snapshot.forecast.count == 1 {
+                    summary += " - only this day is available; do not describe any other day"
+                }
             }
             if !snapshot.hourly.isEmpty {
                 let hourLines = snapshot.hourly.map { hour in
@@ -371,25 +403,6 @@ public nonisolated final class AppleToolExecutor: AppleToolDispatching, @uncheck
             }
             for day in snapshot.forecast {
                 items.append(AppleToolDisplayItem(title: day.day, subtitle: "\(day.condition) \(Int(day.highCelsius.rounded()))° / \(Int(day.lowCelsius.rounded()))°", reference: nil))
-            }
-            // The highlight is matched by real calendar day in the location's
-            // timezone, never by array index, and only when that day actually
-            // exists in the fetched forecast.
-            var highlightedDate: Date?
-            if let offset = weatherRequest.highlightDay, (1...4).contains(offset) {
-                var dayCalendar = Calendar(identifier: .gregorian)
-                if let timeZoneID = snapshot.timeZoneIdentifier, let timeZone = TimeZone(identifier: timeZoneID) {
-                    dayCalendar.timeZone = timeZone
-                } else {
-                    dayCalendar.timeZone = .current
-                }
-                let reference = snapshot.observedAt ?? clock.now()
-                if let target = dayCalendar.date(byAdding: .day, value: offset, to: reference) {
-                    highlightedDate = snapshot.forecast.first(where: { day in
-                        guard let date = day.date else { return false }
-                        return dayCalendar.isDate(date, inSameDayAs: target)
-                    })?.date
-                }
             }
             return AppleToolResult(summary: summary, items: items, weatherPresentation: AppleWeatherPresentation(locationName: snapshot.locationName, attributionText: snapshot.attributionText, attributionURL: snapshot.attributionURL, attributionImageURL: snapshot.attributionImageURL, condition: snapshot.condition, temperatureCelsius: snapshot.temperatureCelsius, highCelsius: snapshot.highCelsius, lowCelsius: snapshot.lowCelsius, symbolName: snapshot.symbolName, isDaylight: snapshot.isDaylight, observedAt: snapshot.observedAt, timeZoneIdentifier: snapshot.timeZoneIdentifier, forecast: snapshot.forecast, highlightedDate: highlightedDate))
 
