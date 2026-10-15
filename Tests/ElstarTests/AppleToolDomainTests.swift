@@ -62,4 +62,39 @@ struct AppleToolDomainTests {
         #expect(AppleToolError.notAvailable("Weather isn't available on this platform.").userMessage.contains("available"))
         #expect(AppleToolError.cancelled.userMessage.contains("cancelled"))
     }
+
+    @Test("Self-referential place wording anchors to the current location, never a geocode")
+    func selfLocationAnchors() {
+        for wording in [
+            "here", "current", "Current", " CURRENT ",
+            "current location", "current place", "current position",
+            "my location", "my current location", "my position", "my current position",
+            "this location", "this place",
+        ] {
+            #expect(AppleToolArgumentParsing.anchor(named: wording) == .currentLocation, "wording \(wording)")
+        }
+        #expect(AppleToolArgumentParsing.anchor(named: nil) == .currentLocation)
+        #expect(AppleToolArgumentParsing.anchor(named: "   ") == .currentLocation)
+    }
+
+    @Test("A real named place stays named and is never collapsed to current")
+    func namedPlaceAnchors() {
+        #expect(AppleToolArgumentParsing.anchor(named: "Cupertino") == .named("Cupertino"))
+        #expect(AppleToolArgumentParsing.anchor(named: "Nieuwerkerk aan den IJssel") == .named("Nieuwerkerk aan den IJssel"))
+        #expect(AppleToolArgumentParsing.anchor(named: "currents") == .named("currents"))
+        #expect(AppleToolArgumentParsing.anchor(named: "my location in Paris") == .named("my location in Paris"))
+    }
+
+    @Test("Weather and nearby-search conversions resolve 'current' to the device location")
+    func conversionResolvesCurrentWording() {
+        let weather = DeviceAgentRequestBuilder.convert(
+            family: "weather", goalID: nil, args: DeviceAgentArguments(location: "current", days: 1)
+        )
+        #expect(weather == .request(.weather(AppleWeatherRequest(anchor: .currentLocation, kind: .forecast(days: 1)))))
+        let search = DeviceAgentRequestBuilder.convert(
+            family: "places", goalID: nil,
+            args: DeviceAgentArguments(operation: "search", query: "sushi", near: "current")
+        )
+        #expect(search == .request(.searchNearbyPlaces(AppleNearbyPlacesRequest(query: "sushi", anchor: .currentLocation, limit: 10))))
+    }
 }

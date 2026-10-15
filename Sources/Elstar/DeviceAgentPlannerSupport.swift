@@ -553,10 +553,29 @@ public nonisolated enum DeviceAgentOperationCatalog {
 // MARK: - Shared argument parsing
 
 public nonisolated enum AppleToolArgumentParsing {
+    /// Place wording models use to mean "the device's own location". Every
+    /// entry must resolve to `.currentLocation` and must never be geocoded:
+    /// the geocoder happily matches "current" to Corrente, Nieuwerkerk aan
+    /// den IJssel, a real village tens of kilometres away, and would
+    /// silently anchor weather and nearby searches there.
+    static let selfLocationNames: Set<String> = [
+        "here",
+        "current",
+        "current location",
+        "current place",
+        "current position",
+        "my location",
+        "my current location",
+        "my position",
+        "my current position",
+        "this location",
+        "this place",
+    ]
+
     public static func anchor(named name: String?) -> ApplePlaceAnchor {
         guard let name, !name.trimmingCharacters(in: .whitespaces).isEmpty else { return .currentLocation }
-        let lowered = name.lowercased()
-        if lowered == "here" || lowered == "current location" || lowered == "my location" {
+        let lowered = name.lowercased().trimmingCharacters(in: .whitespaces)
+        if Self.selfLocationNames.contains(lowered) {
             return .currentLocation
         }
         return .named(name)
