@@ -164,10 +164,15 @@ final class FakeHostResolver: AppleHostResolving, @unchecked Sendable {
 final class ScriptedPlanner: AppleAgentPlanner, @unchecked Sendable {
     nonisolated(unsafe) private var steps: [AppleAgentStep]
     nonisolated(unsafe) var planResult: AppleAgentPlan
+    /// Review decisions returned in order. When empty, all results are approved.
+    nonisolated(unsafe) var reviews: [AppleAgentReview] = []
+    /// When true, reviewResult throws (models a review failure).
+    nonisolated(unsafe) var reviewFails = false
 
-    init(plan: AppleAgentPlan, steps: [AppleAgentStep] = []) {
+    init(plan: AppleAgentPlan, steps: [AppleAgentStep] = [], reviews: [AppleAgentReview] = []) {
         self.planResult = plan
         self.steps = steps
+        self.reviews = reviews
     }
 
     func plan(task: String, history: [AppleModelTurn]) async throws -> AppleAgentPlan {
@@ -177,6 +182,12 @@ final class ScriptedPlanner: AppleAgentPlanner, @unchecked Sendable {
     func nextStep(_ context: AppleAgentContext) async throws -> AppleAgentStep {
         guard !steps.isEmpty else { return .finish }
         return steps.removeFirst()
+    }
+
+    func reviewResult(_ context: AppleAgentContext, step: AppleAgentExecutedStep, result: AppleToolResult) async throws -> AppleAgentReview {
+        if reviewFails { throw NSError(domain: "test", code: 1) }
+        guard !reviews.isEmpty else { return .approved }
+        return reviews.removeFirst()
     }
 }
 

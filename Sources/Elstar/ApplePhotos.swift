@@ -7,6 +7,7 @@ public nonisolated struct ApplePhotosQuery: Equatable, Sendable {
     public let favoritesOnly: Bool
     public let screenshotsOnly: Bool
     public let limit: Int
+    public var answerQuestion = false
 
     public init(start: Date? = nil, end: Date? = nil, albumName: String? = nil, favoritesOnly: Bool = false, screenshotsOnly: Bool = false, limit: Int = 12) throws {
         guard (1...24).contains(limit) else { throw AppleToolError.invalidInput("Request between 1 and 24 photos.") }

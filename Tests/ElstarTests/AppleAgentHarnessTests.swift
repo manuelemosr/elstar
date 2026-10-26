@@ -81,6 +81,137 @@ struct AppleAgentHarnessTests {
 
         #expect(outcome.ending != .answered)
     }
+
+    // MARK: - Result review
+
+    @Test("A rejected result does not satisfy the goal and the planner can retry")
+    func rejectedResultAllowsRetry() async {
+        let goal = AppleAgentGoal(id: "goal-0", operation: .weather, label: "weather for Saturday")
+        let request = AppleToolRequest.weather(AppleWeatherRequest(anchor: .currentLocation, kind: .forecast(days: 2), highlightDay: 1))
+        // First attempt: wrong day (tomorrow). Review rejects. Second attempt: correct.
+        let planner = ScriptedPlanner(
+            plan: .actionable(goals: [goal]),
+            steps: [
+                .execute(request, goalID: "goal-0"),
+                .execute(request, goalID: "goal-0"),
+            ],
+            reviews: [
+                .rejected(reason: "The user asked for Saturday but the result shows Thursday's weather."),
+                .approved,
+            ]
+        )
+        let dispatcher = FakeDispatcher()
+        dispatcher.result = AppleToolResult(summary: "Thursday: Cloudy, 18C", items: [])
+
+        let harness = AppleAgentHarness(planner: planner, dispatcher: dispatcher)
+        let outcome = await harness.run(task: "what's the weather for Saturday?", history: [], goals: [goal])
+
+        #expect(outcome.ending == .answered)
+        #expect(dispatcher.performed.count == 2)
+        #expect(outcome.executed.count == 2)
+        #expect(outcome.executed[0].reviewRejected == true)
+        #expect(outcome.executed[0].reviewReason?.contains("Saturday") == true)
+        #expect(outcome.executed[1].reviewRejected == false)
+    }
+
+    @Test("Repeated rejected results never become accepted when retries run out")
+    func maxRetriesDoesNotAcceptRejectedResult() async {
+        let goal = AppleAgentGoal(id: "goal-0", operation: .weather, label: "weather")
+        let request = AppleToolRequest.weather(AppleWeatherRequest(anchor: .currentLocation, kind: .current))
+        // The fourth selection cannot dispatch after three rejected results.
+        let planner = ScriptedPlanner(
+            plan: .actionable(goals: [goal]),
+            steps: [
+                .execute(request, goalID: "goal-0"),
+                .execute(request, goalID: "goal-0"),
+                .execute(request, goalID: "goal-0"),
+                .execute(request, goalID: "goal-0"),
+            ],
+            reviews: [
+                .rejected(reason: "wrong day"),
+                .rejected(reason: "wrong day"),
+                .rejected(reason: "wrong day"),
+            ]
+        )
+        let dispatcher = FakeDispatcher()
+        dispatcher.result = AppleToolResult(summary: "Today: Sunny, 21C", items: [])
+
+        let harness = AppleAgentHarness(planner: planner, dispatcher: dispatcher, maxRetriesPerGoal: 3)
+        let outcome = await harness.run(task: "weather", history: [], goals: [goal])
+
+        #expect(outcome.ending != .answered)
+        #expect(dispatcher.performed.count == 3)
+        #expect(outcome.executed.filter(\.reviewRejected).count == 3)
+        #expect(!AppleAgentHarness.satisfied(goal, in: outcome.executed))
+    }
+
+    @Test("A review failure leaves the goal unverified")
+    func reviewFailureDoesNotAcceptResult() async {
+        let goal = AppleAgentGoal(id: "goal-0", operation: .listReminders, label: "list")
+        let planner = ScriptedPlanner(
+            plan: .actionable(goals: [goal]),
+            steps: [.execute(.listReminders(listID: nil), goalID: "goal-0")],
+            reviews: []
+        )
+        planner.reviewFails = true
+        let dispatcher = FakeDispatcher()
+        dispatcher.result = AppleToolResult(summary: "Found 1 reminder.", items: [AppleToolDisplayItem(title: "Buy milk")])
+
+        let harness = AppleAgentHarness(planner: planner, dispatcher: dispatcher)
+        let outcome = await harness.run(task: "list my reminders", history: [], goals: [goal])
+
+        #expect(outcome.ending != .answered)
+        #expect(outcome.executed[0].reviewRejected)
+    }
+
+    @Test("Rejected steps appear in grounded facts with the rejection reason")
+    func rejectedStepsInFacts() async {
+        let goal = AppleAgentGoal(id: "goal-0", operation: .weather, label: "weather for Saturday")
+        let request = AppleToolRequest.weather(AppleWeatherRequest(anchor: .currentLocation, kind: .forecast(days: 2), highlightDay: 1))
+        let planner = ScriptedPlanner(
+            plan: .actionable(goals: [goal]),
+            steps: [
+                .execute(request, goalID: "goal-0"),
+                .execute(request, goalID: "goal-0"),
+            ],
+            reviews: [
+                .rejected(reason: "Wrong day: got Thursday, user asked for Saturday."),
+                .approved,
+            ]
+        )
+        let dispatcher = FakeDispatcher()
+        dispatcher.result = AppleToolResult(summary: "Thursday: Cloudy", items: [])
+
+        let harness = AppleAgentHarness(planner: planner, dispatcher: dispatcher)
+        let outcome = await harness.run(task: "what's the weather for Saturday?", history: [], goals: [goal])
+
+        #expect(outcome.groundedFacts.contains("rejected"))
+        #expect(outcome.groundedFacts.contains("Wrong day"))
+    }
+
+    @Test("Auxiliary reads are not reviewed")
+    func auxiliaryReadsNotReviewed() async {
+        let goal = AppleAgentGoal(id: "goal-0", operation: .listReminders, label: "list")
+        // First step: auxiliary read (no goalID). Second step: goal-bound execute.
+        let planner = ScriptedPlanner(
+            plan: .actionable(goals: [goal]),
+            steps: [
+                .execute(.currentTime, goalID: nil),
+                .execute(.listReminders(listID: nil), goalID: "goal-0"),
+            ],
+            reviews: [.approved] // Only one review, for the goal-bound step
+        )
+        let dispatcher = FakeDispatcher()
+        dispatcher.result = AppleToolResult(summary: "Done.", items: [])
+
+        let harness = AppleAgentHarness(planner: planner, dispatcher: dispatcher)
+        let outcome = await harness.run(task: "list", history: [], goals: [goal])
+
+        // The auxiliary read (currentTime) should not be reviewed.
+        #expect(outcome.executed[0].goalID == nil)
+        #expect(outcome.executed[0].reviewRejected == false)
+        #expect(outcome.executed[1].goalID == "goal-0")
+    }
 }
 
 private final class FailingPlanner: AppleAgentPlanner, @unchecked Sendable {

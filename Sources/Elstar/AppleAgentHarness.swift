@@ -27,12 +27,26 @@ public nonisolated struct AppleAgentGoal: Equatable, Sendable, Codable {
 /// to a permissive "anything happened" check.
 public nonisolated enum AppleAgentPlan: Equatable, Sendable {
     case conversation
+    case askQuestion(AppleAgentQuestion)
+    case generateImage(prompt: String, goals: [AppleAgentGoal])
     case actionable(goals: [AppleAgentGoal])
     case invalid(reason: String)
 
     public var goals: [AppleAgentGoal] {
         if case .actionable(let goals) = self { return goals }
         return []
+    }
+}
+
+public nonisolated struct AppleAgentQuestion: Equatable, Sendable {
+    public var question: String
+    public var options: [String]
+    public var allowsMultiple: Bool
+
+    public init(question: String, options: [String] = [], allowsMultiple: Bool = false) {
+        self.question = question
+        self.options = options
+        self.allowsMultiple = allowsMultiple
     }
 }
 
@@ -83,8 +97,13 @@ public nonisolated struct AppleAgentExecutedStep: Equatable, Sendable {
     public var summary: String
     public var items: [AppleToolDisplayItem]
     public var receipt: AppleToolReceipt?
+    /// When the planner reviewed this result and rejected it as not matching
+    /// the user's request, the step is recorded but does not satisfy its goal,
+    /// so the planner can retry with different arguments.
+    public var reviewRejected: Bool
+    public var reviewReason: String?
 
-    public init(request: AppleToolRequest, goalID: String? = nil, hadResult: Bool, declined: Bool, status: AppleToolStatus, summary: String, items: [AppleToolDisplayItem], receipt: AppleToolReceipt? = nil) {
+    public init(request: AppleToolRequest, goalID: String? = nil, hadResult: Bool, declined: Bool, status: AppleToolStatus, summary: String, items: [AppleToolDisplayItem], receipt: AppleToolReceipt? = nil, reviewRejected: Bool = false, reviewReason: String? = nil) {
         self.request = request
         self.goalID = goalID
         self.hadResult = hadResult
@@ -93,8 +112,20 @@ public nonisolated struct AppleAgentExecutedStep: Equatable, Sendable {
         self.summary = summary
         self.items = items
         self.receipt = receipt
+        self.reviewRejected = reviewRejected
+        self.reviewReason = reviewReason
     }
 
+}
+
+// MARK: - Result review
+
+/// The planner's verdict on whether a successful tool result actually answers
+/// the user's request. A rejected result does not satisfy its goal, so the
+/// planner can retry with different arguments (bounded by `maxRetriesPerGoal`).
+public nonisolated enum AppleAgentReview: Equatable, Sendable {
+    case approved
+    case rejected(reason: String)
 }
 
 // MARK: - Planner seam
@@ -132,6 +163,7 @@ public nonisolated struct AppleAgentContext: Sendable {
 public nonisolated enum AppleAgentStep: Equatable, Sendable {
     case execute(AppleToolRequest, goalID: String?)
     case askUser(String)
+    case askQuestion(AppleAgentQuestion)
     case finish
 }
 
@@ -147,11 +179,20 @@ public nonisolated protocol AppleAgentPlanner: Sendable {
     /// through the existential; the default is a plain replan. It never
     /// hard-codes English keyword routing and performs no device work.
     func reconsider(task: String, history: [AppleModelTurn], pendingAction: Bool) async throws -> AppleAgentPlan
+    /// Reviews a successful tool result: does it actually answer what the user
+    /// asked for? A rejected result does not satisfy its goal, so the planner
+    /// can retry with different arguments. The default approves every result,
+    /// preserving the pre-review behavior for planners that do not override it.
+    func reviewResult(_ context: AppleAgentContext, step: AppleAgentExecutedStep, result: AppleToolResult) async throws -> AppleAgentReview
 }
 
 nonisolated extension AppleAgentPlanner {
     public func reconsider(task: String, history: [AppleModelTurn], pendingAction: Bool) async throws -> AppleAgentPlan {
         try await plan(task: task, history: history)
+    }
+
+    public func reviewResult(_ context: AppleAgentContext, step: AppleAgentExecutedStep, result: AppleToolResult) async throws -> AppleAgentReview {
+        .approved
     }
 }
 
@@ -163,6 +204,7 @@ public nonisolated struct AppleAgentOutcome: Equatable, Sendable {
         case answered
         /// A required piece of information is missing.
         case askedUser(String)
+        case askedQuestion(AppleAgentQuestion)
         /// Some goals were met but others were not, within the bounded budget.
         case partial(String)
         /// The request could not be completed within the bounded budget.
@@ -198,6 +240,7 @@ public nonisolated final class AppleAgentHarness: @unchecked Sendable {
     public let dispatcher: any AppleToolDispatching
     public let maxSteps: Int
     public let maxReadRecovery: Int
+    public let maxRetriesPerGoal: Int
     public let capabilities: [String]
 
     public init(
@@ -205,17 +248,21 @@ public nonisolated final class AppleAgentHarness: @unchecked Sendable {
         dispatcher: any AppleToolDispatching,
         maxSteps: Int = 8,
         maxReadRecovery: Int = 2,
+        maxRetriesPerGoal: Int = 3,
         capabilities: [String] = AppleAgentHarness.defaultCapabilities
     ) {
         self.planner = planner
         self.dispatcher = dispatcher
         self.maxSteps = maxSteps
         self.maxReadRecovery = maxReadRecovery
+        self.maxRetriesPerGoal = maxRetriesPerGoal
         self.capabilities = capabilities
     }
 
     public static let defaultCapabilities = [
         "current time (device clock)",
+        "calculator: everyday arithmetic",
+        "photos: metadata search and grouped results",
         "reminders: list",
         "calendar: list/availability",
         "places: search, current location, directions",
@@ -309,6 +356,10 @@ public nonisolated final class AppleAgentHarness: @unchecked Sendable {
             switch step {
             case .execute(let request, let goalID):
                 if let goalID {
+                    if executed.filter({ $0.goalID == goalID && $0.reviewRejected }).count >= maxRetriesPerGoal {
+                        ending = .partial(Self.partialMessage(goals: goals, executed: executed))
+                        break
+                    }
                     guard let goal = goals.first(where: { $0.id == goalID }), goal.operation == request.operation else {
                         invalidAttempts += 1
                         if invalidAttempts > maxReadRecovery {
@@ -369,7 +420,7 @@ public nonisolated final class AppleAgentHarness: @unchecked Sendable {
 
                 let result = await dispatcher.perform(request)
                 if let result {
-                    executed.append(AppleAgentExecutedStep(
+                    var executedStep = AppleAgentExecutedStep(
                         request: request,
                         goalID: goalID,
                         hadResult: true,
@@ -378,7 +429,36 @@ public nonisolated final class AppleAgentHarness: @unchecked Sendable {
                         summary: result.summary,
                         items: result.items,
                         receipt: result.receipt
-                    ))
+                    )
+                    // Result review: a successful goal-bound execution is
+                    // reviewed by the planner before it can satisfy the goal.
+                    // A rejected or unverifiable read cannot satisfy its goal.
+                    // Confirmed mutations remain governed by their real receipts.
+                    if let goalID, Self.isSuccessful(executedStep), !request.isMutation {
+                        let rejectedCount = executed.filter { $0.goalID == goalID && $0.reviewRejected }.count
+                        if rejectedCount < maxRetriesPerGoal {
+                            let reviewContext = AppleAgentContext(
+                                task: task,
+                                history: history,
+                                executed: executed + [executedStep],
+                                goals: goals,
+                                unfinishedGoals: Self.unfinished(goals, in: executed + [executedStep]),
+                                remainingSteps: maxSteps - plannerCalls,
+                                capabilities: capabilities
+                            )
+                            do {
+                                let review = try await planner.reviewResult(reviewContext, step: executedStep, result: result)
+                                if case .rejected(let reason) = review {
+                                    executedStep.reviewRejected = true
+                                    executedStep.reviewReason = reason
+                                }
+                            } catch {
+                                executedStep.reviewRejected = true
+                                executedStep.reviewReason = "The result could not be verified: \(error.localizedDescription)"
+                            }
+                        }
+                    }
+                    executed.append(executedStep)
                 } else {
                     // A nil result means the person declined; reads are never
                     // confirmed, so this only happens for a mutation.
@@ -398,6 +478,10 @@ public nonisolated final class AppleAgentHarness: @unchecked Sendable {
 
             case .askUser(let question):
                 ending = .askedUser(question)
+                break
+
+            case .askQuestion(let question):
+                ending = .askedQuestion(question)
                 break
 
             case .finish:
@@ -428,10 +512,11 @@ public nonisolated final class AppleAgentHarness: @unchecked Sendable {
     /// A goal is satisfied only by an execution that names THIS goal id and is
     /// successful: a `confirmed` non-mutation read, or a `confirmed` mutating
     /// receipt. One execution names one goal, so one receipt can never discharge
-    /// two goals.
+    /// two goals. A result the planner rejected on review does not satisfy the
+    /// goal, so the planner can retry with different arguments.
     public static func satisfied(_ goal: AppleAgentGoal, in executed: [AppleAgentExecutedStep]) -> Bool {
         executed.contains { step in
-            step.goalID == goal.id && isSuccessful(step)
+            step.goalID == goal.id && isSuccessful(step) && !step.reviewRejected
         }
     }
 
@@ -473,6 +558,10 @@ public nonisolated final class AppleAgentHarness: @unchecked Sendable {
         // aggregate even at the maximum step count.
         let statusLines = executed.map { step -> String in
             if step.declined { return "- \(step.request.toolName): declined by the person" }
+            if step.reviewRejected {
+                let reason = step.reviewReason ?? "result did not match the request"
+                return "- \(step.request.toolName) [rejected: \(AppleAgentPromptBudget.clip(reason, to: AppleAgentPromptBudget.summary))]: \(AppleAgentPromptBudget.clip(step.summary, to: AppleAgentPromptBudget.summary))"
+            }
             return "- \(step.request.toolName) [\(step.status.rawValue)]: \(AppleAgentPromptBudget.clip(step.summary, to: AppleAgentPromptBudget.summary))"
         }
         let statusTotal = statusLines.reduce(0) { $0 + $1.count + 1 }
