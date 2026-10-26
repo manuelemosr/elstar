@@ -256,11 +256,14 @@ public nonisolated struct AppleWeatherRequest: Equatable, Sendable {
     public var anchor: ApplePlaceAnchor
     public var kind: AppleWeatherRequestKind
     public var highlightDay: Int?
+    /// Preserve the requested day until the weather location's calendar is known.
+    public var dateReference: String?
 
-    public init(anchor: ApplePlaceAnchor, kind: AppleWeatherRequestKind, highlightDay: Int? = nil) {
+    public init(anchor: ApplePlaceAnchor, kind: AppleWeatherRequestKind, highlightDay: Int? = nil, dateReference: String? = nil) {
         self.anchor = anchor
         self.kind = kind
         self.highlightDay = highlightDay
+        self.dateReference = dateReference
     }
 
 }

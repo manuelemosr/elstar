@@ -110,7 +110,7 @@ struct WeatherPresentationTests {
             confirmations: AppleConfirmationStore(),
             journal: AppleToolJournal(fileURL: url),
             services: .fake(weather: weather),
-            clock: FixedAppleClock(Date(timeIntervalSince1970: 0))
+            clock: FixedAppleClock(weather.snapshot.observedAt ?? Date(timeIntervalSince1970: 0))
         )
 
         let result = await executor.perform(.weather(AppleWeatherRequest(anchor: .currentLocation, kind: .current)))
@@ -181,7 +181,7 @@ struct WeatherPresentationTests {
             confirmations: AppleConfirmationStore(),
             journal: AppleToolJournal(fileURL: FileManager.default.temporaryDirectory.appendingPathComponent("\(UUID().uuidString).json")),
             services: .fake(weather: weather),
-            clock: FixedAppleClock(Date(timeIntervalSince1970: 0))
+            clock: FixedAppleClock(weather.snapshot.observedAt ?? Date(timeIntervalSince1970: 0))
         )
     }
 
@@ -250,13 +250,13 @@ struct WeatherPresentationTests {
 
     @Test("An out-of-range weather highlightDay asks instead of requesting")
     func weatherHighlightDayOutOfRangeAsks() {
-        for offset in [-1, 5] {
+        for offset in [-1, 8] {
             let conversion = DeviceAgentRequestBuilder.convert(family: "weather", goalID: nil, args: DeviceAgentArguments(highlightDay: offset))
             guard case .askUser(let question) = conversion else {
                 Issue.record("expected askUser for highlightDay \(offset)")
                 return
             }
-            #expect(question == "Which forecast day should I highlight? Choose today or one of the next four days.")
+            #expect(question == "Which forecast day should I highlight? Choose today or one of the next seven days.")
         }
     }
 }

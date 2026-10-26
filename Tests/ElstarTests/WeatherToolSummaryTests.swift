@@ -93,7 +93,49 @@ struct WeatherToolSummaryTests {
         guard let result = await execute(request, snapshot: snapshot(forecast: [])) else {
             Issue.record("no weather result"); return
         }
-        #expect(result.summary == "Amsterdam: Mostly Cloudy, 18°C (H 18° L 10°). Weather data by Apple Weather.")
+        #expect(result.summary.hasPrefix("Amsterdam: Mostly Cloudy, 18°C (H 18° L 10°)."))
+        #expect(result.summary.contains("Current conditions observed: Wednesday, 2026-10-14 (Europe/Amsterdam)"))
         #expect(!result.summary.contains("Days fetched"))
+    }
+
+    @Test("A successful weather fetch for the wrong day fails verification")
+    func wrongDayIsNotConfirmed() async throws {
+        let request = AppleWeatherRequest(anchor: .currentLocation, kind: .forecast(days: 3), highlightDay: 2)
+        let wrongDay = day(0, label: "Today", high: 18, low: 10)
+        let result = try #require(await execute(request, snapshot: snapshot(forecast: [wrongDay])))
+        #expect(result.status != .confirmed)
+        #expect(result.summary.contains("requested forecast for Friday, 2026-10-16"))
+        #expect(result.summary.contains("Do not substitute current conditions or another day"))
+        #expect(result.weatherPresentation == nil)
+    }
+
+    @Test("A weekday is resolved again in the weather location's calendar")
+    func requestedWeekdayUsesLocationCalendar() async throws {
+        // Wednesday afternoon in Amsterdam is already Thursday in Kiritimati.
+        // Friday is therefore one day ahead there, rather than the phone's two.
+        let friday = day(1, label: "Friday", high: 25, low: 20)
+        var weather = snapshot(forecast: [friday])
+        weather.timeZoneIdentifier = "Pacific/Kiritimati"
+        let request = AppleWeatherRequest(anchor: .named("Kiritimati"), kind: .forecast(days: 3), highlightDay: 2, dateReference: "Friday")
+        let result = try #require(await execute(request, snapshot: weather))
+        #expect(result.status == .confirmed)
+        #expect(result.weatherPresentation?.highlightedDate == friday.date)
+        #expect(result.summary.contains("Requested forecast date: Friday, 2026-10-16"))
+    }
+
+    @Test("Undated or missing daily data cannot satisfy a requested day")
+    func missingDatesFailVerification() async throws {
+        for forecast in [[], [AppleWeatherDay(day: "Friday", condition: "Clear", highCelsius: 20, lowCelsius: 10)]] {
+            let result = try #require(await execute(.init(anchor: .currentLocation, kind: .forecast(days: 3), highlightDay: 2), snapshot: snapshot(forecast: forecast)))
+            #expect(result.status != .confirmed)
+            #expect(result.summary.contains("Available forecast dates: none"))
+        }
+    }
+
+    @Test("An unavailable daily forecast cannot be replaced with current conditions")
+    func currentConditionsDoNotSatisfyForecast() async throws {
+        let result = try #require(await execute(.init(anchor: .currentLocation, kind: .forecast(days: 3)), snapshot: snapshot(forecast: [])))
+        #expect(result.status != .confirmed)
+        #expect(result.summary.contains("no daily forecast"))
     }
 }

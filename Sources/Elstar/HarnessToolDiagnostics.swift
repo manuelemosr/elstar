@@ -74,6 +74,7 @@ public nonisolated enum DeveloperChatToolArguments {
             fields["mode"] = r.mode.rawValue
         case .weather(let r):
             fields["anchor"] = r.anchor.key
+            if let date = r.dateReference { fields["date"] = date }
             switch r.kind {
             case .current: fields["kind"] = "current"
             case .forecast(let days): fields["kind"] = "forecast"; fields["days"] = String(days)

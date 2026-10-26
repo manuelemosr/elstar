@@ -4,16 +4,21 @@ import Testing
 
 @Suite("Planner location and forecast defaults")
 struct DevicePlannerDefaultsTests {
-    @Test func advertisedTomorrowExampleUsesCurrentLocationAndIncludesTomorrow() throws {
+    @Test func advertisedDateExampleUsesCurrentLocationAndResolvesWeekday() throws {
         let contract = try #require(DeviceAgentOperationCatalog.all.first { $0.operation == .weather })
         let args = try JSONDecoder().decode(DeviceAgentArguments.self, from: Data(contract.exampleJSON.utf8))
         let selection = DeviceAgentStepSelection.execute(operation: .weather, family: .weather, goalID: "forecast")
+        // Wednesday Oct 21, 2026 -> Saturday = offset 3, needs 4 days
+        var cal = Calendar(identifier: .gregorian)
+        cal.timeZone = TimeZone(identifier: "Europe/Amsterdam")!
+        let wednesday = cal.date(from: DateComponents(year: 2026, month: 10, day: 21, hour: 11, minute: 47))!
         let conversion = DeviceAgentRequestBuilder.convertSelected(selection: selection, args: args,
-            clock: FixedAppleClock(Date()), calendar: Calendar(identifier: .gregorian))
+            clock: FixedAppleClock(wednesday), calendar: cal)
         guard case .success(.request(.weather(let request))) = conversion else { Issue.record("Expected weather request"); return }
         #expect(request.anchor == .currentLocation)
-        #expect(request.kind == .forecast(days: 2))
-        #expect(request.highlightDay == 1)
+        #expect(request.highlightDay == 3)
+        guard case .forecast(let days) = request.kind else { Issue.record("Expected forecast"); return }
+        #expect(days == 4)
     }
 
     @Test func onlyUnfinishedGoalsAreOfferedForExecution() {

@@ -364,16 +364,39 @@ public nonisolated final class AppleToolExecutor: AppleToolDispatching, @uncheck
             } else {
                 dayCalendar.timeZone = .current
             }
-            let reference = snapshot.observedAt ?? clock.now()
+            let reference = clock.now()
+            var requestedOffset = weatherRequest.highlightDay
+            if let dateReference = weatherRequest.dateReference?.trimmingCharacters(in: .whitespacesAndNewlines), !dateReference.isEmpty {
+                guard let resolved = AppleWeatherDateResolution.resolve(dateReference, now: reference, calendar: dayCalendar) else {
+                    throw AppleToolError.invalidInput("The requested date is outside the supported forecast window for this location.")
+                }
+                if resolved.daysNeeded > 0 { requestedOffset = resolved.dayOffset }
+            }
+            let dateFormatter = DateFormatter()
+            dateFormatter.locale = Locale(identifier: "en_US_POSIX")
+            dateFormatter.calendar = dayCalendar
+            dateFormatter.timeZone = dayCalendar.timeZone
+            dateFormatter.dateFormat = "EEEE, yyyy-MM-dd"
             var highlighted: AppleWeatherDay?
             var highlightedDate: Date?
-            if let offset = weatherRequest.highlightDay, (1...4).contains(offset),
-               let target = dayCalendar.date(byAdding: .day, value: offset, to: reference) {
+            if let offset = requestedOffset {
+                guard (0...7).contains(offset),
+                      let target = dayCalendar.date(byAdding: .day, value: offset, to: reference) else {
+                    throw AppleToolError.invalidInput("Choose today or one of the next seven days.")
+                }
                 highlighted = snapshot.forecast.first { day in
                     guard let date = day.date else { return false }
                     return dayCalendar.isDate(date, inSameDayAs: target)
                 }
+                // Current conditions may explicitly select today without a daily forecast.
+                if highlighted == nil, offset != 0 || weatherRequest.kind != .current {
+                    let available = snapshot.forecast.compactMap(\.date).map { dateFormatter.string(from: $0) }.joined(separator: "; ")
+                    throw AppleToolError.notAvailable("The weather service did not return the requested forecast for \(dateFormatter.string(from: target)). Available forecast dates: \(available.isEmpty ? "none" : available). Do not substitute current conditions or another day. You may retry the requested date once; if it is still unavailable, explain that limitation.")
+                }
                 highlightedDate = highlighted?.date
+            }
+            if case .forecast = weatherRequest.kind, snapshot.forecast.isEmpty {
+                throw AppleToolError.notAvailable("The weather service returned current conditions but no daily forecast. Do not present current conditions as a forecast. You may retry once; otherwise explain that the forecast is unavailable.")
             }
             let subject = highlighted ?? snapshot.forecast.first
             var summary = "\(snapshot.locationName): \(snapshot.condition), \(Int(snapshot.temperatureCelsius.rounded()))°C"
@@ -395,6 +418,12 @@ public nonisolated final class AppleToolExecutor: AppleToolDispatching, @uncheck
                     "\(hour.time) \(hour.condition) \(Int(hour.temperatureCelsius.rounded()))° \(Int((hour.precipitationChance * 100).rounded()))% rain"
                 }.joined(separator: "; ")
                 summary += ". Hourly: \(hourLines)"
+            }
+            if let observedAt = snapshot.observedAt {
+                summary += ". Current conditions observed: \(dateFormatter.string(from: observedAt)) (\(dayCalendar.timeZone.identifier))"
+            }
+            if let highlightedDate {
+                summary += ". Requested forecast date: \(dateFormatter.string(from: highlightedDate))"
             }
             summary += ". Weather data by Apple Weather."
             var items = [AppleToolDisplayItem(title: snapshot.condition, subtitle: "\(Int(snapshot.temperatureCelsius.rounded()))°C", reference: nil)]

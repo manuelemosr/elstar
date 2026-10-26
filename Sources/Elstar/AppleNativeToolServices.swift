@@ -583,11 +583,21 @@ public final class WeatherKitWeatherService: AppleWeatherService, @unchecked Sen
         let placemark = try? await reverseGeocode(location)
         let timeZone = placemark?.timeZone ?? .current
         let temperatureC = current.temperature.converted(to: .celsius).value
+        var dayCalendar = Calendar(identifier: .gregorian)
+        dayCalendar.timeZone = timeZone
+        let reference = Date()
+        var requestedHighlight = request.highlightDay
+        if let dateReference = request.dateReference?.trimmingCharacters(in: .whitespacesAndNewlines), !dateReference.isEmpty {
+            guard let resolved = AppleWeatherDateResolution.resolve(dateReference, now: reference, calendar: dayCalendar) else {
+                throw AppleToolError.invalidInput("The requested date is outside the supported forecast window for this location.")
+            }
+            if resolved.daysNeeded > 0 { requestedHighlight = resolved.dayOffset }
+        }
         var requestedDays = 0
         if case .forecast(let days) = request.kind {
-            requestedDays = min(max(days, 0), 5)
+            requestedDays = min(max(days, 0), 7)
         }
-        if let highlightDay = request.highlightDay, (1...4).contains(highlightDay) {
+        if let highlightDay = requestedHighlight, (0...7).contains(highlightDay) {
             requestedDays = max(requestedDays, highlightDay + 1)
         }
         var forecast: [AppleWeatherDay] = []
@@ -636,10 +646,8 @@ public final class WeatherKitWeatherService: AppleWeatherService, @unchecked Sen
         // today's numbers under a future day's label. Matched by real calendar
         // day in the location's timezone, never by array index.
         var highlightedDay: AppleWeatherDay?
-        if let highlightDay = request.highlightDay, (1...4).contains(highlightDay) {
-            var dayCalendar = Calendar(identifier: .gregorian)
-            dayCalendar.timeZone = timeZone
-            if let target = dayCalendar.date(byAdding: .day, value: highlightDay, to: current.date) {
+        if let highlightDay = requestedHighlight, (0...7).contains(highlightDay) {
+            if let target = dayCalendar.date(byAdding: .day, value: highlightDay, to: reference) {
                 highlightedDay = forecast.first { day in
                     guard let date = day.date else { return false }
                     return dayCalendar.isDate(date, inSameDayAs: target)

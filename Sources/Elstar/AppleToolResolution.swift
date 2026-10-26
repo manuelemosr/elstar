@@ -126,6 +126,84 @@ public nonisolated enum AppleDateResolution {
     }
 }
 
+// MARK: - Weather date resolution
+
+/// Resolves a model-supplied date reference for weather forecasts. Accepts an
+/// ISO date ("2026-10-24"), a weekday name ("Saturday", "saturday"), or a
+/// relative phrase ("tomorrow"), or "now" for current conditions. Returns the day offset from today (0=today,
+/// 1=tomorrow, etc.) and the total number of forecast days needed to include
+/// that date (zero for "now"). Returns nil for unrecognized input or dates
+/// outside today through seven days ahead.
+public nonisolated enum AppleWeatherDateResolution {
+    /// Weekday names mapped to Calendar's weekday index (1=Sunday, 2=Monday, ...).
+    private static let weekdayNames: [String: Int] = [
+        "sunday": 1, "sun": 1,
+        "monday": 2, "mon": 2,
+        "tuesday": 3, "tue": 3, "tues": 3,
+        "wednesday": 4, "wed": 4,
+        "thursday": 5, "thu": 5, "thur": 5, "thurs": 5,
+        "friday": 6, "fri": 6,
+        "saturday": 7, "sat": 7,
+    ]
+
+    public nonisolated struct ResolvedDate: Equatable, Sendable {
+        /// Day offset from today: 0=today, 1=tomorrow, etc.
+        public var dayOffset: Int
+        /// Total forecast days needed (including today) to cover the target date.
+        public var daysNeeded: Int
+
+        public init(dayOffset: Int, daysNeeded: Int) {
+            self.dayOffset = dayOffset
+            self.daysNeeded = daysNeeded
+        }
+    }
+
+    /// Resolves a date reference to a day offset and required forecast days.
+    /// - Parameters:
+    ///   - text: The model-supplied date string (ISO date, weekday name, or "tomorrow").
+    ///   - now: The current date/time.
+    ///   - calendar: The device calendar for weekday computation.
+    /// - Returns: A `ResolvedDate` with the offset and days needed, or nil if the input is unrecognized.
+    public static func resolve(_ text: String?, now: Date, calendar: Calendar) -> ResolvedDate? {
+        guard let raw = text?.trimmingCharacters(in: .whitespacesAndNewlines), !raw.isEmpty else { return nil }
+        let lowered = raw.lowercased()
+
+        if lowered == "now" {
+            return ResolvedDate(dayOffset: 0, daysNeeded: 0)
+        }
+
+        // Relative phrase
+        if lowered == "tomorrow" {
+            return ResolvedDate(dayOffset: 1, daysNeeded: 2)
+        }
+        if lowered == "today" {
+            return ResolvedDate(dayOffset: 0, daysNeeded: 1)
+        }
+
+        // ISO date (yyyy-MM-dd)
+        if let parsed = AppleDateResolution.parse(raw, calendar: calendar) {
+            let startOfToday = calendar.startOfDay(for: now)
+            let startOfTarget = calendar.startOfDay(for: parsed.date)
+            guard let dayDiff = calendar.dateComponents([.day], from: startOfToday, to: startOfTarget).day, (0...7).contains(dayDiff) else {
+                return nil // Outside the supported forecast window.
+            }
+            return ResolvedDate(dayOffset: dayDiff, daysNeeded: dayDiff + 1)
+        }
+
+        // Weekday name: find the next occurrence (including today if today matches)
+        if let targetWeekday = weekdayNames[lowered] {
+            let todayWeekday = calendar.component(.weekday, from: now)
+            let offset = (targetWeekday - todayWeekday + 7) % 7
+            // If the user says "Saturday" on a Saturday, they mean today (offset 0).
+            // If they say "Saturday" on a Sunday, they mean 6 days from now.
+            // The formula above already handles this: same weekday → offset 0.
+            return ResolvedDate(dayOffset: offset, daysNeeded: offset + 1)
+        }
+
+        return nil
+    }
+}
+
 // MARK: - Current time
 
 /// The current-time tool's answer. The canonical ISO string and the localized
