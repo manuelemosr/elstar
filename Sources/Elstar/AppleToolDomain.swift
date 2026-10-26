@@ -14,6 +14,7 @@ public nonisolated enum AppleToolFamily: String, CaseIterable, Codable, Sendable
     case time
     case calculator
     case photos
+    case interaction
 
     public var displayName: String {
         switch self {
@@ -25,6 +26,7 @@ public nonisolated enum AppleToolFamily: String, CaseIterable, Codable, Sendable
         case .time: "Time"
         case .calculator: "Calculator"
         case .photos: "Photos"
+        case .interaction: "Question"
         }
     }
 }
@@ -48,6 +50,7 @@ public nonisolated enum AppleToolOperation: String, CaseIterable, Codable, Senda
     case directions = "places.directions"
     case weather = "weather.current"
     case fetchWebPage = "webfetch.read"
+    case askQuestion = "interaction.ask"
 
     /// Whether the operation changes user-visible state and therefore requires
     /// an explicit per-action confirmation before it runs. No built-in
@@ -68,6 +71,7 @@ public nonisolated enum AppleToolOperation: String, CaseIterable, Codable, Senda
         case .searchNearbyPlaces, .currentPlace, .directions: .places
         case .weather: .weather
         case .fetchWebPage: .webfetch
+        case .askQuestion: .interaction
         }
     }
 
@@ -85,6 +89,7 @@ public nonisolated enum AppleToolOperation: String, CaseIterable, Codable, Senda
         case .directions: "open directions"
         case .weather: "get weather"
         case .fetchWebPage: "read a web page"
+        case .askQuestion: "ask the requested question"
         }
     }
 }

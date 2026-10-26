@@ -32,4 +32,20 @@ struct DevicePlannerDefaultsTests {
         #expect(!choices.contains("finished-weather"))
         #expect(instructions.contains("finished-weather: already completed"))
     }
+    @Test("A sole independent operation goes directly to arguments across tool families", arguments: DeviceAgentOperationCatalog.all.filter { $0.prerequisites == nil }.map(\.operation))
+    func directOperationSelection(operation: AppleToolOperation) {
+        let goal = AppleAgentGoal(id: "goal-0", operation: operation, label: "Requested outcome")
+        let context = AppleAgentContext(task: "A request", history: [], executed: [], goals: [goal], unfinishedGoals: [goal], remainingSteps: 3, capabilities: [])
+        #expect(DeviceAgentStepResolver.directSelection(context) == .execute(operation: operation, family: operation.family, goalID: goal.id))
+    }
+
+    @Test func dependentAndMultipleGoalsKeepStepPlanning() {
+        let directions = AppleAgentGoal(id: "goal-0", operation: .directions, label: "Directions")
+        let time = AppleAgentGoal(id: "goal-1", operation: .currentTime, label: "Time")
+        for goals in [[directions], [directions, time]] {
+            let context = AppleAgentContext(task: "A request", history: [], executed: [], goals: goals, unfinishedGoals: goals, remainingSteps: 3, capabilities: [])
+            #expect(DeviceAgentStepResolver.directSelection(context) == nil)
+        }
+    }
+
 }
