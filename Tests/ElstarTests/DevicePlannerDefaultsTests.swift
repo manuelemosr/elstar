@@ -48,4 +48,25 @@ struct DevicePlannerDefaultsTests {
         }
     }
 
+    @Test func reviewUsesTheSameLocalCalendarAsExecution() {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(identifier: "Europe/Amsterdam")!
+        let now = calendar.date(from: DateComponents(year: 2026, month: 10, day: 26, hour: 21))!
+        let start = calendar.startOfDay(for: calendar.date(byAdding: .day, value: 1, to: now)!)
+        let end = calendar.date(byAdding: .day, value: 1, to: start)!
+        let query = AppleCalendarRangeQuery(start: start, end: end)
+        let goal = AppleAgentGoal(id: "goal", operation: .calendarAvailability, label: "Tomorrow")
+        let step = AppleAgentExecutedStep(request: .calendarAvailability(query), goalID: goal.id,
+            hadResult: true, declined: false, status: .confirmed, summary: "No timed busy blocks", items: [])
+        let context = AppleAgentContext(task: "Tomorrow's busy blocks", history: [.init(role: .assistant, text: "The first coffee shop found is Cafe Blue.")], executed: [],
+            goals: [goal], unfinishedGoals: [goal], remainingSteps: 3, capabilities: [])
+        let prompt = DeviceAgentPlannerPrompts.reviewPrompt(context: context, step: step,
+            result: .init(summary: "No timed busy blocks"), now: now, calendar: calendar)
+        #expect(prompt.contains("Monday, 26 October 2026"))
+        #expect(prompt.contains("27 Oct 2026"))
+        #expect(prompt.contains("Europe/Amsterdam"))
+        #expect(prompt.contains("Cafe Blue"))
+        #expect(!prompt.contains("2026-10-26 23:00:00 +0000"))
+    }
+
 }

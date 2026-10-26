@@ -31,6 +31,34 @@ struct AppleToolExecutorTests {
         )
     }
 
+    @Test("Fetched page titles are explicitly labeled for verification")
+    func fetchedTitleEvidence() async {
+        let executor = makeExecutor(services: .fake(), sink: RecordingEventSink(),
+            tracker: RecordingTracker(), confirmations: AppleConfirmationStore(), journal: makeJournal())
+        let result = await executor.perform(.fetchWebPage(.init(url: URL(string: "https://example.com")!)))
+        #expect(result?.summary.contains("Page title: Example") == true)
+        #expect(result?.summary.contains("Page text: Hello") == true)
+    }
+
+    @Test("All-day events remain labeled and do not manufacture timed busy blocks")
+    func allDayCalendarEvidence() async {
+        let calendar = FakeCalendarService()
+        let start = Date(timeIntervalSince1970: 1_700_000_000)
+        let end = start.addingTimeInterval(86_400)
+        calendar.eventsResult = [.init(id: "birthday", title: "Birthday", start: start, end: end, isAllDay: true)]
+        let executor = makeExecutor(services: .fake(calendar: calendar), sink: RecordingEventSink(),
+            tracker: RecordingTracker(), confirmations: AppleConfirmationStore(), journal: makeJournal())
+        let query = AppleCalendarRangeQuery(start: start, end: end)
+        let events = await executor.perform(.listCalendarEvents(query))
+        #expect(events?.items.first?.subtitle?.contains("All day") == true)
+        #expect(events?.summary.contains("not event times") == true)
+        let availability = await executor.perform(.calendarAvailability(query))
+        #expect(availability?.status == .confirmed)
+        #expect(availability?.items.isEmpty == true)
+        #expect(availability?.summary.contains("0 timed busy blocks") == true)
+        #expect(availability?.summary.contains("All-day entries are excluded") == true)
+    }
+
     @Test("A read runs without confirmation, emits running then completed, and records no receipt")
     func readFlow() async {
         let reminders = FakeRemindersService()

@@ -29,6 +29,7 @@ public nonisolated struct AppleAgentGoal: Equatable, Sendable, Codable {
 /// to a permissive "anything happened" check.
 public nonisolated enum AppleAgentPlan: Equatable, Sendable {
     case conversation
+    case capabilities(families: [AppleToolFamily])
     case askQuestion(AppleAgentQuestion)
     case generateImage(prompt: String, goals: [AppleAgentGoal])
     case actionable(goals: [AppleAgentGoal])

@@ -237,14 +237,14 @@ public nonisolated final class AppleToolExecutor: AppleToolDispatching, @uncheck
         case .listReminderLists:
             let lists = try await services.reminders.lists()
             return AppleToolResult(
-                summary: "Reminder lists: \(lists.count).",
+                summary: "Reminder lists: \(lists.count) total. Showing the first \(min(lists.count, 12)) list names.",
                 items: lists.prefix(12).map { AppleToolDisplayItem(title: $0.title, subtitle: nil, reference: $0.id) }
             )
 
         case .listReminders(let listID):
             let reminders = try await services.reminders.reminders(listID: listID, limit: 25)
             return AppleToolResult(
-                summary: reminders.isEmpty ? "No reminders found." : "Found \(reminders.count) reminders.",
+                summary: reminders.isEmpty ? "No open reminders found for this query." : "Showing \(reminders.count) open reminders, up to 25 per request. This is the returned batch, not a total count of all open reminders.",
                 items: reminders.map { reminder in
                     AppleToolDisplayItem(
                         title: reminder.title,
@@ -259,8 +259,8 @@ public nonisolated final class AppleToolExecutor: AppleToolDispatching, @uncheck
             let interval = AppleDateResolution.describe(query, calendar: calendar)
             return AppleToolResult(
                 summary: events.isEmpty
-                    ? "No events found between \(interval)."
-                    : "\(events.count) event\(events.count == 1 ? "" : "s") between \(interval):",
+                    ? "No calendar events found. Search window: \(interval)."
+                    : "Found \(events.count) calendar event\(events.count == 1 ? "" : "s"). Search window (not event times): \(interval). Each event's own time or all-day status is listed below.",
                 items: events.map { event -> AppleToolDisplayItem in
                     // Model-facing context so questions like "where?" are
                     // answerable from one read: location plus calendar name.
@@ -282,7 +282,7 @@ public nonisolated final class AppleToolExecutor: AppleToolDispatching, @uncheck
             let busy = events.filter { !$0.isAllDay }
             let interval = AppleDateResolution.describe(query, calendar: calendar)
             return AppleToolResult(
-                summary: busy.isEmpty ? "No timed conflicts between \(interval)." : "\(busy.count) busy blocks between \(interval):",
+                summary: "Found \(busy.count) timed busy block\(busy.count == 1 ? "" : "s"). Calendar query window: \(interval). All-day entries are excluded from timed availability.",
                 items: busy.map { AppleToolDisplayItem(title: $0.title, subtitle: "\(AppleDateFormatting.spoken($0.start)) to \(AppleDateFormatting.spoken($0.end))", reference: $0.id) }
             )
 
@@ -348,7 +348,7 @@ public nonisolated final class AppleToolExecutor: AppleToolDispatching, @uncheck
             let instant = clock.now()
             let summary = AppleCurrentTime.summarize(now: instant, calendar: calendar)
             return AppleToolResult(
-                summary: summary.summary,
+                summary: "Device clock. \(summary.summary) Device time zone: \(calendar.timeZone.identifier).",
                 items: [AppleToolDisplayItem(title: AppleDateFormatting.spoken(instant, calendar: calendar), subtitle: calendar.timeZone.identifier, reference: nil)]
             )
 
@@ -439,8 +439,8 @@ public nonisolated final class AppleToolExecutor: AppleToolDispatching, @uncheck
             let page = try await services.webFetch.fetch(fetchRequest)
             var items = page.links.prefix(12).map { AppleToolDisplayItem(title: $0.text, subtitle: $0.url.absoluteString, reference: $0.url.absoluteString) }
             if items.isEmpty { items = [AppleToolDisplayItem(title: page.sourceURL.absoluteString, subtitle: "source", reference: page.sourceURL.absoluteString)] }
-            let titleLine = page.title.map { "\($0)\n" } ?? ""
-            return AppleToolResult(summary: "Fetched \(page.sourceURL.absoluteString).\n\(titleLine)\(page.text)", items: items)
+            let titleLine = page.title.map { "Page title: \($0)\n" } ?? "Page title: not provided by the page.\n"
+            return AppleToolResult(summary: "Fetched \(page.sourceURL.absoluteString).\n\(titleLine)Page text: \(page.text)", items: items)
         }
     }
 
