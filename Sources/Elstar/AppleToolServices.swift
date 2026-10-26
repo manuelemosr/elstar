@@ -376,6 +376,22 @@ public nonisolated protocol AppleToolDispatching: AnyObject, Sendable {
 
 /// The real FoundationModels bridge. The pure backend depends only on this
 /// small seam; the app installs the concrete implementation.
+public nonisolated enum AppleModelResponsePurpose: Equatable, Sendable {
+    case conversation
+    case reporting
+    case synthesis
+
+    @TaskLocal public static var current: AppleModelResponsePurpose = .conversation
+    @TaskLocal public static var reportingTokenBudget: Int = 1024
+
+    public var maximumOutputTokens: Int? { self == .reporting ? Self.reportingTokenBudget : nil }
+
+    /// Small answers stay bounded; longer verified lists retain room to report their facts.
+    public static func reportingBudget(for facts: String) -> Int {
+        max(1024, min(8192, facts.utf8.count + 256))
+    }
+}
+
 public nonisolated protocol AppleFoundationModelRuntime: AnyObject, Sendable {
     func availability() -> AppleIntelligenceAvailability
 

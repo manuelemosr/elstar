@@ -150,7 +150,7 @@ struct AppleAgentHarnessTests {
         let goal = AppleAgentGoal(id: "goal-0", operation: .listReminders, label: "list")
         let planner = ScriptedPlanner(
             plan: .actionable(goals: [goal]),
-            steps: [.execute(.listReminders(listID: nil), goalID: "goal-0")],
+            steps: [.execute(.listReminders(listID: nil), goalID: "goal-0"), .execute(.listReminders(listID: nil), goalID: "goal-0")],
             reviews: []
         )
         planner.reviewFails = true
@@ -162,6 +162,23 @@ struct AppleAgentHarnessTests {
 
         #expect(outcome.ending != .answered)
         #expect(outcome.executed[0].reviewRejected)
+        #expect(dispatcher.performed.count == 1)
+        guard case .unavailable = outcome.ending else { Issue.record("An unavailable reviewer must stop without replaying tools"); return }
+    }
+
+    @Test("Final reporting excludes rejected and failed records across tool families")
+    func answerFactsExcludeUnverifiedAttempts() {
+        let rejected = AppleAgentExecutedStep(request: .listReminders(listID: nil), goalID: "g", hadResult: true,
+            declined: false, status: .confirmed, summary: "Wrong list", items: [], reviewRejected: true, reviewReason: "Wrong list")
+        let failed = AppleAgentExecutedStep(request: .currentTime, goalID: nil, hadResult: true,
+            declined: false, status: .failed, summary: "Clock failed", items: [])
+        let approved = AppleAgentExecutedStep(request: .listReminders(listID: nil), goalID: "g", hadResult: true,
+            declined: false, status: .confirmed, summary: "Correct reminders", items: [])
+        let facts = AppleAgentHarness.answerFacts([rejected, failed, approved])
+        #expect(facts.contains("Correct reminders"))
+        #expect(!facts.contains("Wrong list"))
+        #expect(!facts.contains("Clock failed"))
+        #expect(!facts.contains("rejected"))
     }
 
     @Test("Rejected steps appear in grounded facts with the rejection reason")

@@ -10,13 +10,15 @@ public nonisolated struct AppleAgentGoal: Equatable, Sendable, Codable {
     public var id: String
     public var operation: AppleToolOperation
     public var label: String
+    public var requiresSynthesis: Bool?
 
     public var isMutation: Bool { operation.isMutation }
 
-    public init(id: String, operation: AppleToolOperation, label: String) {
+    public init(id: String, operation: AppleToolOperation, label: String, requiresSynthesis: Bool? = nil) {
         self.id = id
         self.operation = operation
         self.label = label
+        self.requiresSynthesis = requiresSynthesis
     }
 
 }
@@ -454,7 +456,11 @@ public nonisolated final class AppleAgentHarness: @unchecked Sendable {
                                 }
                             } catch {
                                 executedStep.reviewRejected = true
-                                executedStep.reviewReason = "The result could not be verified: \(error.localizedDescription)"
+                                let reason = "The result could not be verified: \(error.localizedDescription)"
+                                executedStep.reviewReason = reason
+                                // A review failure says nothing about the fetched data.
+                                // End verification honestly instead of replaying the tool.
+                                ending = .unavailable(reason)
                             }
                         }
                     }
@@ -582,6 +588,11 @@ public nonisolated final class AppleAgentHarness: @unchecked Sendable {
             if detailBudget <= 0 { continue }
         }
         return blocks.joined(separator: "\n")
+    }
+
+    /// Final reporting has no rejected attempts or failed reads to reconsider.
+    public static func answerFacts(_ executed: [AppleAgentExecutedStep]) -> String {
+        facts(executed.filter { isSuccessful($0) && !$0.reviewRejected })
     }
 
     private static func boundedDetails(for step: AppleAgentExecutedStep, budget: Int) -> String {
