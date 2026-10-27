@@ -372,16 +372,6 @@ public nonisolated final class AppleAgentHarness: @unchecked Sendable {
                         }
                         continue
                     }
-                    // Once a validated exact-read request has run, recovery may retry
-                    // it but cannot silently substitute another date, URL, filter or item.
-                    // Search refinement retains semantic review and its existing policy.
-                    if request.bindsRecoveryArguments {
-                        if let original = boundReads[goalID], original != request {
-                            ending = .partial("I couldn't complete the requested read. A retry changed its original details, so I stopped rather than returning unrelated information.")
-                            break
-                        }
-                        boundReads[goalID] = request
-                    }
                     // While other goals remain unfinished, an execute that
                     // names a goal already backed by its own confirmed evidence
                     // is rejected without dispatching another read or write.
@@ -395,6 +385,16 @@ public nonisolated final class AppleAgentHarness: @unchecked Sendable {
                             break
                         }
                         continue
+                    }
+                    // Once a validated exact-read request has run, recovery may retry
+                    // it but cannot silently substitute another date, URL, filter or item.
+                    // Search refinement retains semantic review and its existing policy.
+                    if request.bindsRecoveryArguments {
+                        if let original = boundReads[goalID], original != request {
+                            ending = .partial("I couldn't complete the requested read. A retry changed its original details, so I stopped rather than returning unrelated information.")
+                            break
+                        }
+                        boundReads[goalID] = request
                     }
                 } else if request.isMutation {
                     // A write with no declared goal is not allowed.
