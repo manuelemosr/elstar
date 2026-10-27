@@ -30,6 +30,12 @@ struct ApplePhotosExecutorTests {
         #expect(result.modelText.contains("limited"))
         #expect(sink.interactions.isEmpty && sink.receipts.isEmpty)
     }
+    @Test func mismatchedMetadataDoesNotAttestCoverage() async throws {
+        let photo = ApplePhotoRecord(id: "fixture", pixelWidth: 1, pixelHeight: 1, isFavorite: false)
+        let request = AppleToolRequest.findPhotos(try ApplePhotosQuery(favoritesOnly: true))
+        let result = await executor(service: FixedPhotosService(result: .init(photos: [photo])), sink: RecordingEventSink()).perform(request)
+        #expect(result?.verifiedRequest == nil)
+    }
     @Test func deniedPermissionIsNotReportedAsAnEmptySearch() async throws {
         let sink = RecordingEventSink()
         let result = await executor(service: FixedPhotosService(result: ApplePhotosPresentation(photos: []), error: .permissionDenied("Photos")), sink: sink).perform(.findPhotos(try ApplePhotosQuery()))

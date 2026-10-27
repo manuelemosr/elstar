@@ -82,6 +82,54 @@ struct AppleAgentHarnessTests {
         #expect(outcome.ending != .answered)
     }
 
+    @Test("Native coverage preserves correct results across read families")
+    func nativeCoverageAvoidsFalseRejection() async throws {
+        let requests: [AppleToolRequest] = [.currentTime, .calculate(expression: "23*17"),
+            .findPhotos(try .init(limit: 1)), .fetchWebPage(.init(url: URL(string: "https://example.com")!)),
+            .weather(.init(anchor: .currentLocation, kind: .forecast(days: 2), dateReference: "Wednesday"))]
+        for request in requests {
+            let goal = AppleAgentGoal(id: "goal-0", operation: request.operation, label: "Requested facts")
+            let planner = ScriptedPlanner(plan: .actionable(goals: [goal]), steps: [.execute(request, goalID: goal.id)],
+                reviews: [.rejected(reason: "A false model rejection must not discard native coverage")])
+            let dispatcher = FakeDispatcher()
+            dispatcher.result = AppleToolResult(summary: "Native verified facts", verifiedRequest: request)
+            let outcome = await AppleAgentHarness(planner: planner, dispatcher: dispatcher).run(task: "Read the requested facts", history: [], goals: [goal])
+            #expect(outcome.ending == .answered)
+            #expect(dispatcher.performed.count == 1)
+            #expect(outcome.groundedFacts.contains("Native verified facts"))
+        }
+    }
+
+    @Test("Evidence for different arguments cannot bypass review")
+    func mismatchedCoverageStillReviews() async {
+        let request = AppleToolRequest.calculate(expression: "2+2")
+        let goal = AppleAgentGoal(id: "goal-0", operation: .calculate, label: "Arithmetic")
+        let planner = ScriptedPlanner(plan: .actionable(goals: [goal]), steps: [.execute(request, goalID: goal.id)],
+            reviews: [.rejected(reason: "Different expression")])
+        let dispatcher = FakeDispatcher()
+        dispatcher.result = AppleToolResult(summary: "Wrong result", verifiedRequest: .calculate(expression: "3+3"))
+        let outcome = await AppleAgentHarness(planner: planner, dispatcher: dispatcher).run(task: "2+2", history: [], goals: [goal])
+        #expect(outcome.executed.first?.reviewRejected == true)
+        #expect(outcome.ending != .answered)
+    }
+
+    @Test("Recovery cannot replace a requested URL or date")
+    func recoveryPreservesReadIdentity() async {
+        let pairs: [(AppleToolRequest, AppleToolRequest)] = [
+            (.fetchWebPage(.init(url: URL(string: "https://example.org")!)), .fetchWebPage(.init(url: URL(string: "https://example.com")!))),
+            (.weather(.init(anchor: .currentLocation, kind: .forecast(days: 2), dateReference: "Wednesday")), .weather(.init(anchor: .currentLocation, kind: .current, dateReference: "now")))
+        ]
+        for (original, changed) in pairs {
+            let goal = AppleAgentGoal(id: "goal", operation: original.operation, label: "Original request")
+            let planner = ScriptedPlanner(plan: .actionable(goals: [goal]), steps: [.execute(original, goalID: goal.id), .execute(changed, goalID: goal.id)], reviews: [])
+            let dispatcher = FakeDispatcher()
+            dispatcher.result = .init(summary: "Unavailable", status: .failed)
+            let outcome = await AppleAgentHarness(planner: planner, dispatcher: dispatcher).run(task: "Read original target", history: [], goals: [goal])
+            #expect(dispatcher.performed == [original])
+            #expect(outcome.ending != .answered)
+        }
+    }
+
     // MARK: - Result review
 
     @Test("A rejected result does not satisfy the goal and the planner can retry")

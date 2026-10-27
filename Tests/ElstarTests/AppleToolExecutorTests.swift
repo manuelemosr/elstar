@@ -31,6 +31,19 @@ struct AppleToolExecutorTests {
         )
     }
 
+    @Test("Native exact-read evidence is bound to the actual executed arguments")
+    func nativeReadEvidence() async {
+        let executor = makeExecutor(services: .fake(), sink: RecordingEventSink(), tracker: RecordingTracker(),
+            confirmations: AppleConfirmationStore(), journal: makeJournal())
+        for request in [AppleToolRequest.currentTime, .calculate(expression: "23*17"), .fetchWebPage(.init(url: URL(string: "https://example.com")!))] {
+            let result = await executor.perform(request)
+            #expect(result?.verifiedRequest == request)
+        }
+        let invalid = await executor.perform(.calculate(expression: "1/0"))
+        #expect(invalid?.status != .confirmed)
+        #expect(invalid?.verifiedRequest == nil)
+    }
+
     @Test("Fetched page titles are explicitly labeled for verification")
     func fetchedTitleEvidence() async {
         let executor = makeExecutor(services: .fake(), sink: RecordingEventSink(),

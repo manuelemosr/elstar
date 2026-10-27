@@ -320,6 +320,7 @@ public nonisolated final class AppleAgentHarness: @unchecked Sendable {
         var auxiliaryReadRepeats = 0
         var plannerCalls = 0
         var stickyKeys: Set<String> = []
+        var boundReads: [String: AppleToolRequest] = [:]
         var ending: AppleAgentOutcome.Ending?
 
         while plannerCalls < maxSteps, ending == nil {
@@ -370,6 +371,16 @@ public nonisolated final class AppleAgentHarness: @unchecked Sendable {
                             break
                         }
                         continue
+                    }
+                    // Once a validated exact-read request has run, recovery may retry
+                    // it but cannot silently substitute another date, URL, filter or item.
+                    // Search refinement retains semantic review and its existing policy.
+                    if request.bindsRecoveryArguments {
+                        if let original = boundReads[goalID], original != request {
+                            ending = .partial("I couldn't complete the requested read. A retry changed its original details, so I stopped rather than returning unrelated information.")
+                            break
+                        }
+                        boundReads[goalID] = request
                     }
                     // While other goals remain unfinished, an execute that
                     // names a goal already backed by its own confirmed evidence
@@ -437,7 +448,10 @@ public nonisolated final class AppleAgentHarness: @unchecked Sendable {
                     // reviewed by the planner before it can satisfy the goal.
                     // A rejected or unverifiable read cannot satisfy its goal.
                     // Confirmed mutations remain governed by their real receipts.
-                    if let goalID, Self.isSuccessful(executedStep), !request.isMutation {
+                    // Exact native coverage discharges a read without a second model
+                    // vetoing valid evidence. Semantic/partial/legacy results still review.
+                    if let goalID, Self.isSuccessful(executedStep), !request.isMutation,
+                       result.verifiedRequest != request {
                         let rejectedCount = executed.filter { $0.goalID == goalID && $0.reviewRejected }.count
                         if rejectedCount < maxRetriesPerGoal {
                             let reviewContext = AppleAgentContext(
@@ -622,5 +636,17 @@ public nonisolated final class AppleAgentHarness: @unchecked Sendable {
             if line.count <= remaining { text += line }
         }
         return text
+    }
+}
+
+private extension AppleToolRequest {
+    var bindsRecoveryArguments: Bool {
+        switch self {
+        case .currentTime, .calculate, .findPhotos, .weather, .fetchWebPage,
+             .listCalendarEvents, .calendarAvailability, .listReminderLists, .listReminders:
+            true
+        case .searchNearbyPlaces, .currentPlace, .directions:
+            false
+        }
     }
 }

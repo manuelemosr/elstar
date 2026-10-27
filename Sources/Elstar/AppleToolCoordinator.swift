@@ -338,18 +338,23 @@ public nonisolated final class AppleToolExecutor: AppleToolDispatching, @uncheck
             let items = presentation.photos.map { photo in
                 AppleToolDisplayItem(title: photo.isScreenshot ? "Screenshot" : "Photo", subtitle: photo.creationDate.map { AppleDateFormatting.spoken($0, calendar: calendar) }, detail: "\(photo.pixelWidth) x \(photo.pixelHeight)\(photo.isFavorite ? ", favorite" : "")")
             }
-            return AppleToolResult(summary: summary, items: items, photosPresentation: presentation)
+            let covered = query.albumName == nil && presentation.photos.count <= query.limit && presentation.photos.allSatisfy { photo in
+                (!query.favoritesOnly || photo.isFavorite) && (!query.screenshotsOnly || photo.isScreenshot)
+                    && (query.start == nil || (photo.creationDate.map { $0 >= query.start! && $0 < query.end! } ?? false))
+            }
+            return AppleToolResult(summary: summary, items: items, photosPresentation: presentation, verifiedRequest: covered ? request : nil)
         case .calculate(let expression):
             let calculation = try AppleCalculator.evaluate(expression)
             let suffix = calculation.isApproximate ? " (approximate - decimal precision limit)" : ""
-            return AppleToolResult(summary: "\(calculation.expression) = \(calculation.value)" + suffix)
+            return AppleToolResult(summary: "\(calculation.expression) = \(calculation.value)" + suffix, verifiedRequest: request)
 
         case .currentTime:
             let instant = clock.now()
             let summary = AppleCurrentTime.summarize(now: instant, calendar: calendar)
             return AppleToolResult(
                 summary: "Device clock. \(summary.summary) Device time zone: \(calendar.timeZone.identifier).",
-                items: [AppleToolDisplayItem(title: AppleDateFormatting.spoken(instant, calendar: calendar), subtitle: calendar.timeZone.identifier, reference: nil)]
+                items: [AppleToolDisplayItem(title: AppleDateFormatting.spoken(instant, calendar: calendar), subtitle: calendar.timeZone.identifier, reference: nil)],
+                verifiedRequest: request
             )
 
         case .weather(let weatherRequest):
@@ -433,14 +438,14 @@ public nonisolated final class AppleToolExecutor: AppleToolDispatching, @uncheck
             for day in snapshot.forecast {
                 items.append(AppleToolDisplayItem(title: day.day, subtitle: "\(day.condition) \(Int(day.highCelsius.rounded()))° / \(Int(day.lowCelsius.rounded()))°", reference: nil))
             }
-            return AppleToolResult(summary: summary, items: items, weatherPresentation: AppleWeatherPresentation(locationName: snapshot.locationName, attributionText: snapshot.attributionText, attributionURL: snapshot.attributionURL, attributionImageURL: snapshot.attributionImageURL, condition: snapshot.condition, temperatureCelsius: snapshot.temperatureCelsius, highCelsius: snapshot.highCelsius, lowCelsius: snapshot.lowCelsius, symbolName: snapshot.symbolName, isDaylight: snapshot.isDaylight, observedAt: snapshot.observedAt, timeZoneIdentifier: snapshot.timeZoneIdentifier, forecast: snapshot.forecast, highlightedDate: highlightedDate))
+            return AppleToolResult(summary: summary, items: items, weatherPresentation: AppleWeatherPresentation(locationName: snapshot.locationName, attributionText: snapshot.attributionText, attributionURL: snapshot.attributionURL, attributionImageURL: snapshot.attributionImageURL, condition: snapshot.condition, temperatureCelsius: snapshot.temperatureCelsius, highCelsius: snapshot.highCelsius, lowCelsius: snapshot.lowCelsius, symbolName: snapshot.symbolName, isDaylight: snapshot.isDaylight, observedAt: snapshot.observedAt, timeZoneIdentifier: snapshot.timeZoneIdentifier, forecast: snapshot.forecast, highlightedDate: highlightedDate), verifiedRequest: request)
 
         case .fetchWebPage(let fetchRequest):
             let page = try await services.webFetch.fetch(fetchRequest)
             var items = page.links.prefix(12).map { AppleToolDisplayItem(title: $0.text, subtitle: $0.url.absoluteString, reference: $0.url.absoluteString) }
             if items.isEmpty { items = [AppleToolDisplayItem(title: page.sourceURL.absoluteString, subtitle: "source", reference: page.sourceURL.absoluteString)] }
             let titleLine = page.title.map { "Page title: \($0)\n" } ?? "Page title: not provided by the page.\n"
-            return AppleToolResult(summary: "Fetched \(page.sourceURL.absoluteString).\n\(titleLine)Page text: \(page.text)", items: items)
+            return AppleToolResult(summary: "Fetched \(page.sourceURL.absoluteString).\n\(titleLine)Page text: \(page.text)", items: items, verifiedRequest: request)
         }
     }
 

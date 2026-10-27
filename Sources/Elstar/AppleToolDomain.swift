@@ -469,8 +469,11 @@ public nonisolated struct AppleToolResult: Equatable, Sendable {
     /// Structured, persistable WeatherKit attribution for the weather card.
     public var weatherPresentation: AppleWeatherPresentation?
     public var photosPresentation: ApplePhotosPresentation?
+    /// Native-only evidence that contract checks fulfilled this exact bounded read.
+    /// Never deserialize this from model output. Absent for partial or semantic-search results.
+    public var verifiedRequest: AppleToolRequest?
 
-    public init(summary: String, items: [AppleToolDisplayItem] = [], receipt: AppleToolReceipt? = nil, status: AppleToolStatus = .confirmed, mapPresentation: AppleMapPresentation? = nil, directionsPresentation: AppleDirectionsPresentation? = nil, weatherPresentation: AppleWeatherPresentation? = nil, photosPresentation: ApplePhotosPresentation? = nil) {
+    public init(summary: String, items: [AppleToolDisplayItem] = [], receipt: AppleToolReceipt? = nil, status: AppleToolStatus = .confirmed, mapPresentation: AppleMapPresentation? = nil, directionsPresentation: AppleDirectionsPresentation? = nil, weatherPresentation: AppleWeatherPresentation? = nil, photosPresentation: ApplePhotosPresentation? = nil, verifiedRequest: AppleToolRequest? = nil) {
         self.summary = summary
         self.items = items
         self.receipt = receipt
@@ -479,6 +482,7 @@ public nonisolated struct AppleToolResult: Equatable, Sendable {
         self.directionsPresentation = directionsPresentation
         self.weatherPresentation = weatherPresentation
         self.photosPresentation = photosPresentation
+        self.verifiedRequest = verifiedRequest
     }
 
     /// The bounded text placed in the model transcript / tool card.
